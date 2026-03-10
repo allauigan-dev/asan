@@ -9,7 +9,8 @@ import {
 
 import {
   type ConnectionForm,
-  ENV_TOKEN,
+  clearConfig,
+  hasStoredConnection,
   readStoredConfig,
   saveConfig,
   toConfig,
@@ -31,8 +32,10 @@ import {
   getSummaryReport,
   getTripReport,
   login,
+  revokeToken,
   parseRealtimePayload,
   toRealtimeUrl,
+  TotpRequiredError,
   type TraccarConfig,
   type TraccarDevice,
   type TraccarEvent,
@@ -45,7 +48,12 @@ import {
 
 export type View = "live" | "replay"
 export type StatusFilter = "all" | "online" | "unknown" | "offline"
-export type ConnectionState = "idle" | "connecting" | "connected" | "error"
+export type ConnectionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "error"
+  | "totp_required"
 export type PlaybackSpeed = 1 | 2 | 4 | 8
 
 export type RouteWindow = {
@@ -76,7 +84,7 @@ export function useFleet() {
     readStoredConfig()
   )
   const [connectionState, setConnectionState] = useState<ConnectionState>(
-    ENV_TOKEN ? "connecting" : "idle"
+    hasStoredConnection() ? "connecting" : "idle"
   )
   const [connectionError, setConnectionError] = useState("")
   const [user, setUser] = useState<TraccarUser | null>(null)
@@ -395,6 +403,21 @@ export function useFleet() {
     }
   }, [connectionForm, connectionState])
 
+  // Establish a cookie session so /api/media requests can authenticate via
+  // credentials: 'include' (Traccar's media endpoint requires cookie auth).
+  // Best-effort — image display degrades gracefully if this fails.
+  async function createCookieSession(form: ConnectionForm) {
+    if (form.authMode !== "session" || !form.email || !form.password) return
+    const body = new URLSearchParams({ email: form.email, password: form.password })
+    if (form.code) body.set("code", form.code)
+    await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      credentials: "include",
+      body,
+    }).catch(() => {})
+  }
+
   // Data fetchers
   async function refreshLiveData(config: TraccarConfig) {
     const [devicesResponse, positionsResponse] = await Promise.all([
@@ -481,7 +504,7 @@ export function useFleet() {
   // Auto-connect on mount
   useEffect(() => {
     const storedConfig = readStoredConfig()
-    if (!storedConfig.serverUrl) {
+    if (!hasStoredConnection()) {
       setConnectionState("idle")
       return
     }
@@ -490,31 +513,23 @@ export function useFleet() {
     setConnectionState("connecting")
 
     const initialize = async () => {
-      if (config.authMode === "token" && config.token) {
-        const activeDeviceId = await refreshLiveData(config)
-        if (activeDeviceId) {
-          await loadReplayData(
-            config,
-            activeDeviceId,
-            toIsoValue(routeWindow.from),
-            toIsoValue(routeWindow.to)
-          )
-        }
-        setUser({
-          id: 0,
-          name: "Token session",
-          email: "Bearer token",
-        })
-        return
-      }
+      const result = await login(config)
+      setUser(result.user)
 
-      // Instead of getting the session, we need to explicitly login
-      const sessionUser = await login(config)
-      setUser(sessionUser)
-      const activeDeviceId = await refreshLiveData(config)
+      // Persist the active token into the form so toConfig() uses it
+      const updatedForm: ConnectionForm = {
+        ...storedConfig,
+        activeToken: result.token,
+      }
+      setConnectionForm(updatedForm)
+      saveConfig(updatedForm)
+      await createCookieSession(updatedForm)
+
+      const tokenConfig = toConfig(updatedForm)
+      const activeDeviceId = await refreshLiveData(tokenConfig)
       if (activeDeviceId) {
         await loadReplayData(
-          config,
+          tokenConfig,
           activeDeviceId,
           toIsoValue(routeWindow.from),
           toIsoValue(routeWindow.to)
@@ -524,14 +539,12 @@ export function useFleet() {
 
     initialize()
       .then(() => {
-        setConnectionForm(storedConfig)
         setConnectionState("connected")
       })
-      .catch((error) => {
-        setConnectionState("error")
-        setConnectionError(
-          error instanceof Error ? error.message : "Auto-connect failed."
-        )
+      .catch(() => {
+        // Stored session expired or invalid — silently show the login form.
+        clearConfig()
+        setConnectionState("idle")
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -543,13 +556,21 @@ export function useFleet() {
     setConnectionError("")
 
     try {
-      const sessionUser = await login(config)
-      saveConfig(form)
-      setUser(sessionUser)
-      const activeDeviceId = await refreshLiveData(config)
+      const result = await login(config)
+      const updatedForm: ConnectionForm = {
+        ...form,
+        activeToken: result.token,
+      }
+      setConnectionForm(updatedForm)
+      saveConfig(updatedForm)
+      setUser(result.user)
+      await createCookieSession(updatedForm)
+
+      const tokenConfig = toConfig(updatedForm)
+      const activeDeviceId = await refreshLiveData(tokenConfig)
       if (activeDeviceId) {
         await loadReplayData(
-          config,
+          tokenConfig,
           activeDeviceId,
           toIsoValue(routeWindow.from),
           toIsoValue(routeWindow.to)
@@ -557,6 +578,13 @@ export function useFleet() {
       }
       setConnectionState("connected")
     } catch (error) {
+      if (error instanceof TotpRequiredError) {
+        // Server requires a TOTP code — switch back to idle so the user can
+        // enter the code without losing the rest of the form.
+        setConnectionState("totp_required")
+        setConnectionError("Enter the TOTP code from your authenticator app.")
+        return
+      }
       setConnectionState("error")
       setConnectionError(
         error instanceof Error ? error.message : "Unable to connect to Traccar."
@@ -667,5 +695,33 @@ export function useFleet() {
     handleConnect,
     handleRefresh,
     handleLoadReplay,
+    handleLogout: async () => {
+      try {
+        await revokeToken(toConfig(connectionForm))
+      } catch {
+        // Ignore logout errors
+      } finally {
+        clearConfig()
+        setUser(null)
+        setConnectionState("idle")
+        setConnectionForm({
+          serverUrl: "",
+          authMode: "session",
+          email: "",
+          password: "",
+          token: "",
+          code: "",
+          activeToken: "",
+        })
+        setFleet({
+          devices: [],
+          positions: [],
+          routePositions: [],
+          trips: [],
+          summary: [],
+          events: [],
+        })
+      }
+    },
   }
 }

@@ -5,63 +5,96 @@ import {
   type TraccarConfig,
 } from "@/lib/traccar"
 
-const ENV_SERVER_URL = import.meta.env.DEV
-  ? typeof window !== "undefined"
-    ? window.location.origin
-    : ""
-  : import.meta.env.VITE_TRACCAR_URL?.trim() ||
-    (typeof window !== "undefined" ? window.location.origin : "")
-const ENV_WS_URL = import.meta.env.VITE_TRACCAR_WS_URL?.trim() || ""
-const ENV_TOKEN = import.meta.env.VITE_TRACCAR_TOKEN?.trim() || ""
-const ENV_EMAIL = import.meta.env.VITE_TRACCAR_EMAIL?.trim() || ""
-const ENV_PASSWORD = import.meta.env.VITE_TRACCAR_PASSWORD?.trim() || ""
-
 export const STORAGE_KEY = "asan.traccar.config"
 
 export type ConnectionForm = {
   serverUrl: string
-  wsUrl: string
   authMode: AuthMode
   email: string
   password: string
   token: string
+  /** TOTP code for two-factor authentication. */
+  code: string
+  /** Bearer token obtained after login — used for all API requests. */
+  activeToken: string
+}
+
+const emptyForm: ConnectionForm = {
+  serverUrl: "",
+  authMode: "session",
+  email: "",
+  password: "",
+  token: "",
+  code: "",
+  activeToken: "",
 }
 
 export function readStoredConfig(): ConnectionForm {
-  return {
-    serverUrl: ENV_SERVER_URL,
-    wsUrl: ENV_WS_URL,
-    authMode: ENV_EMAIL && ENV_PASSWORD ? "session" : "token",
-    email: ENV_EMAIL,
-    password: ENV_PASSWORD,
-    token: ENV_TOKEN,
+  if (typeof window !== "undefined") {
+    try {
+      const stored = window.sessionStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        return JSON.parse(stored) as ConnectionForm
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return { ...emptyForm }
+}
+
+export function saveConfig(config: ConnectionForm) {
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    } catch {
+      // Ignore storage errors
+    }
   }
 }
 
-export function saveConfig(_config: ConnectionForm) {
-  // Disabled local storage to strictly use .env
+export function clearConfig() {
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // Ignore storage errors
+    }
+  }
 }
 
+/**
+ * Convert the form into a TraccarConfig suitable for API calls.
+ * Always uses the activeToken (obtained during login) as the bearer token.
+ */
 export function toConfig(form: ConnectionForm): TraccarConfig {
+  const serverUrl = normalizeServerUrl(form.serverUrl)
   return {
-    serverUrl: normalizeServerUrl(form.serverUrl),
-    wsUrl: normalizeWsUrl(form.wsUrl, form.serverUrl),
+    serverUrl,
+    wsUrl: normalizeWsUrl("", form.serverUrl),
     authMode: form.authMode,
     email: form.email.trim(),
     password: form.password,
-    token: form.token.trim(),
+    token: form.activeToken || form.token.trim(),
+    code: form.code.trim() || undefined,
   }
 }
 
 export function hasStoredConnection(): boolean {
   const config = readStoredConfig()
+  if (!config.serverUrl) {
+    return false
+  }
+  // If we have an active token from a previous login, we can reconnect
+  if (config.activeToken) {
+    return true
+  }
   if (config.authMode === "token" && config.token) {
     return true
   }
-  if (config.serverUrl && config.email) {
+  if (config.authMode === "session" && config.email) {
     return true
   }
   return false
 }
-
-export { ENV_TOKEN }

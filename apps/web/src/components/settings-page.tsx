@@ -26,7 +26,7 @@ type SettingsPageProps = {
   connectionState: ConnectionState
   connectionError: string
   onConnect: (form: ConnectionForm) => void
-  onClose: () => void
+  onClose?: () => void
 }
 
 export function SettingsPage({
@@ -42,125 +42,142 @@ export function SettingsPage({
     onConnect(form)
   }
 
+  const isConnecting = connectionState === "connecting"
+  const isTotpRequired = connectionState === "totp_required"
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
       <Card className="w-full max-w-md border border-border/70 bg-card shadow-2xl">
         <CardHeader className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4"
-            onClick={onClose}
-          >
-            <X className="size-4" />
-          </Button>
-          <CardTitle>Traccar Connection</CardTitle>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4"
+              onClick={onClose}
+            >
+              <X className="size-4" />
+            </Button>
+          )}
+          <CardTitle>
+            {onClose ? "Traccar Connection" : "Login to ASAN"}
+          </CardTitle>
           <CardDescription>
-            Configure your Traccar server connection. This UI wraps the REST API
-            and websocket stream.
+            {isTotpRequired
+              ? "Enter the verification code from your authenticator app."
+              : "Enter your Traccar server URL and credentials to connect."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-3" onSubmit={handleSubmit}>
             <div className="grid gap-3">
-              <label className="text-xs font-medium text-muted-foreground">
-                Server URL
-              </label>
-              <Input
-                value={form.serverUrl}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    serverUrl: event.target.value,
-                  }))
-                }
-                placeholder="https://your-traccar-server.com/api"
-              />
-
-              <label className="text-xs font-medium text-muted-foreground">
-                WebSocket URL
-              </label>
-              <Input
-                value={form.wsUrl}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    wsUrl: event.target.value,
-                  }))
-                }
-                placeholder="wss://your-traccar-server.com/api/socket (auto-derived if blank)"
-              />
-
-              <label className="text-xs font-medium text-muted-foreground">
-                Authentication
-              </label>
-              <Select
-                value={form.authMode}
-                onValueChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    authMode: value as AuthMode,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Auth mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="session">Session login</SelectItem>
-                  <SelectItem value="token">Bearer token</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {form.authMode === "session" ? (
-                <>
-                  <Input
-                    value={form.email}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        email: event.target.value,
-                      }))
-                    }
-                    placeholder="Email"
-                    type="email"
-                  />
-                  <Input
-                    value={form.password}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        password: event.target.value,
-                      }))
-                    }
-                    placeholder="Password"
-                    type="password"
-                  />
-                </>
-              ) : (
+              {isTotpRequired ? (
                 <Input
-                  value={form.token}
+                  value={form.code}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      token: event.target.value,
+                      code: event.target.value,
                     }))
                   }
-                  placeholder="Bearer token"
+                  placeholder="6-digit code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
                 />
+              ) : (
+                <>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Server URL
+                  </label>
+                  <Input
+                    value={form.serverUrl}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        serverUrl: event.target.value,
+                      }))
+                    }
+                    placeholder="https://your-traccar-server.com"
+                    disabled={isConnecting}
+                    autoFocus
+                  />
+
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Authentication
+                  </label>
+                  <Select
+                    value={form.authMode}
+                    onValueChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        authMode: value as AuthMode,
+                      }))
+                    }
+                    disabled={isConnecting}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Auth mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="session">Email & Password</SelectItem>
+                      <SelectItem value="token">API Token</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {form.authMode === "session" ? (
+                    <>
+                      <Input
+                        value={form.email}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            email: event.target.value,
+                          }))
+                        }
+                        placeholder="Email"
+                        type="email"
+                        disabled={isConnecting}
+                      />
+                      <Input
+                        value={form.password}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            password: event.target.value,
+                          }))
+                        }
+                        placeholder="Password"
+                        type="password"
+                        disabled={isConnecting}
+                      />
+                    </>
+                  ) : (
+                    <Input
+                      value={form.token}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          token: event.target.value,
+                        }))
+                      }
+                      placeholder="Bearer token"
+                      disabled={isConnecting}
+                    />
+                  )}
+                </>
               )}
             </div>
 
-            <Button
-              className="w-full"
-              disabled={connectionState === "connecting"}
-            >
+            <Button className="w-full" disabled={isConnecting}>
               <ShieldCheck className="size-4" />
-              {connectionState === "connecting"
+              {isConnecting
                 ? "Connecting..."
-                : "Connect to Traccar"}
+                : isTotpRequired
+                  ? "Verify"
+                  : "Connect"}
             </Button>
-            {connectionError ? (
+            {connectionError && !isTotpRequired ? (
               <p className="text-xs text-destructive">{connectionError}</p>
             ) : null}
           </form>

@@ -1,5 +1,12 @@
 export type AuthMode = "session" | "token"
 
+export class TotpRequiredError extends Error {
+  constructor() {
+    super("TOTP code required")
+    this.name = "TotpRequiredError"
+  }
+}
+
 export type TraccarConfig = {
   serverUrl: string
   wsUrl?: string
@@ -7,6 +14,7 @@ export type TraccarConfig = {
   email?: string
   password?: string
   token?: string
+  code?: string
 }
 
 export type TraccarUser = {
@@ -14,6 +22,11 @@ export type TraccarUser = {
   name?: string
   email?: string
   administrator?: boolean
+}
+
+export type LoginResult = {
+  user: TraccarUser
+  token: string
 }
 
 export type TraccarDevice = {
@@ -81,7 +94,7 @@ export type RealtimePayload = {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST"
+  method?: "GET" | "POST" | "DELETE"
   query?: URLSearchParams
   body?: BodyInit | null
   headers?: HeadersInit
@@ -122,10 +135,11 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "")
 }
 
+// Always attach bearer token if available — no cookie auth.
 function createHeaders(config: TraccarConfig, headers?: HeadersInit) {
   const nextHeaders = new Headers(headers)
 
-  if (config.authMode === "token" && config.token) {
+  if (config.token) {
     nextHeaders.set("Authorization", `Bearer ${config.token}`)
   }
 
@@ -146,10 +160,12 @@ async function request<T>(
     method: options.method ?? "GET",
     body: options.body,
     headers: createHeaders(config, options.headers),
-    credentials: "include",
   })
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Invalid credentials or session expired.")
+    }
     const message = await response.text()
     throw new Error(message || `Request failed with status ${response.status}`)
   }
@@ -162,27 +178,150 @@ async function request<T>(
   return (await response.text()) as T
 }
 
-async function login(config: TraccarConfig) {
-  if (config.authMode !== "session") {
-    await getDevices(config)
-    return {
-      id: 0,
-      name: "Token session",
-      email: "Bearer token",
-    }
+/**
+ * Login to Traccar and obtain a bearer token for all subsequent requests.
+ *
+ * For "session" auth (email/password):
+ *   1. Use HTTP Basic Auth to call POST /session/token → returns a bearer token string.
+ *   2. Use GET /session?token=<token> → returns the User object.
+ *
+ * For "token" auth (pre-existing API token):
+ *   1. Validate via GET /session?token=<token> → returns the User object.
+ */
+async function login(config: TraccarConfig): Promise<LoginResult> {
+  if (config.authMode === "token" && config.token) {
+    // Validate the token by fetching session info
+    const tokenConfig: TraccarConfig = { ...config }
+    const query = new URLSearchParams({ token: config.token })
+    const user = await request<TraccarUser>(tokenConfig, "/session", { query })
+    return { user, token: config.token }
   }
 
-  const body = new URLSearchParams({
-    email: config.email ?? "",
-    password: config.password ?? "",
-  })
+  // Session auth: generate a bearer token using Basic Auth
+  const basicCredentials = btoa(
+    `${config.email ?? ""}:${config.password ?? ""}`
+  )
+  const serverUrl = normalizeServerUrl(config.serverUrl)
 
-  return request<TraccarUser>(config, "/session", {
+  // If a TOTP code is provided, we must first create a cookie-based session
+  // via POST /session (form-encoded) since Basic Auth alone can't carry the
+  // TOTP code to the /session/token endpoint.
+  if (config.code) {
+    const params = new URLSearchParams()
+    params.set("email", config.email ?? "")
+    params.set("password", config.password ?? "")
+    params.set("code", config.code)
+    const sessionResponse = await fetch(new URL(`${serverUrl}/session`), {
+      method: "POST",
+      body: params,
+      credentials: "include",
+    })
+
+    if (!sessionResponse.ok) {
+      if (sessionResponse.status === 401) {
+        // If server still asks for TOTP, the code was wrong
+        if (sessionResponse.headers.get("WWW-Authenticate") === "TOTP") {
+          throw new Error("Invalid TOTP code.")
+        }
+        throw new Error("Invalid email or password.")
+      }
+      const message = await sessionResponse.text()
+      throw new Error(
+        message || `Login failed with status ${sessionResponse.status}`
+      )
+    }
+
+    const user = (await sessionResponse.json()) as TraccarUser
+
+    // Now generate a bearer token using the established session cookie
+    const tokenUrl = new URL(`${serverUrl}/session/token`)
+    const tokenResponse = await fetch(tokenUrl, {
+      method: "POST",
+      body: new URLSearchParams(),
+      credentials: "include",
+    })
+
+    if (!tokenResponse.ok) {
+      // Token generation failed, but session is valid — fall back to
+      // cookie-only mode by using the email as a pseudo-token identifier.
+      // This won't work for WebSocket auth, but at least the user is in.
+      throw new Error("Session created but failed to generate bearer token.")
+    }
+
+    const rawToken = await tokenResponse.text()
+    if (!rawToken || rawToken.trim().length === 0) {
+      throw new Error("Server returned an empty token.")
+    }
+
+    return { user, token: rawToken.trim() }
+  }
+
+  // Step 1: POST /session/token with Basic Auth to get a bearer token
+  const tokenUrl = new URL(`${serverUrl}/session/token`)
+  const tokenResponse = await fetch(tokenUrl, {
     method: "POST",
-    body,
     headers: {
+      Authorization: `Basic ${basicCredentials}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
+    body: new URLSearchParams(),
+  })
+
+  if (!tokenResponse.ok) {
+    if (tokenResponse.status === 401) {
+      // Check if server is requesting a TOTP code
+      if (tokenResponse.headers.get("WWW-Authenticate") === "TOTP") {
+        throw new TotpRequiredError()
+      }
+      throw new Error("Invalid email or password.")
+    }
+    const message = await tokenResponse.text()
+    throw new Error(
+      message || `Login failed with status ${tokenResponse.status}`
+    )
+  }
+
+  const token = await tokenResponse.text()
+
+  if (!token || token.trim().length === 0) {
+    throw new Error("Server returned an empty token.")
+  }
+
+  const activeToken = token.trim()
+
+  // Step 2: GET /session?token=<token> to retrieve user info
+  const sessionUrl = new URL(`${serverUrl}/session`)
+  sessionUrl.searchParams.set("token", activeToken)
+  const sessionResponse = await fetch(sessionUrl, {
+    method: "GET",
+  })
+
+  if (!sessionResponse.ok) {
+    throw new Error("Failed to retrieve session after login.")
+  }
+
+  const user = (await sessionResponse.json()) as TraccarUser
+
+  return { user, token: activeToken }
+}
+
+/**
+ * Revoke a bearer token via POST /session/token/revoke.
+ * Best-effort — errors are swallowed by the caller.
+ */
+async function revokeToken(config: TraccarConfig) {
+  if (!config.token) return
+
+  const serverUrl = normalizeServerUrl(config.serverUrl)
+  const url = new URL(`${serverUrl}/session/token/revoke`)
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ token: config.token }),
   })
 }
 
@@ -191,7 +330,7 @@ function getSession(config: TraccarConfig) {
 }
 
 function logout(config: TraccarConfig) {
-  return request<string>(config, "/session", { method: "POST" })
+  return request<string>(config, "/session", { method: "DELETE" })
 }
 
 function getDevices(config: TraccarConfig) {
@@ -277,7 +416,7 @@ function toRealtimeUrl(config: TraccarConfig) {
 
   // Browsers can't attach Authorization headers to WebSocket requests,
   // so token auth needs to flow through the URL when the server supports it.
-  if (config.authMode === "token" && config.token) {
+  if (config.token) {
     url.searchParams.set("token", config.token)
   }
 
@@ -316,5 +455,6 @@ export {
   normalizeServerUrl,
   normalizeWsUrl,
   parseRealtimePayload,
+  revokeToken,
   toRealtimeUrl,
 }

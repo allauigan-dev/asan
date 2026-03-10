@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
   Map,
+  MapClusterLayer,
   MapControls,
   MapMarker,
   MapRoute,
@@ -19,6 +20,7 @@ import { FleetSidebar } from "@/components/fleet-sidebar"
 import {
   ChevronLeft,
   ChevronRight,
+  LogOut,
   MapPinned,
   Moon,
   Navigation,
@@ -36,6 +38,7 @@ import { ReplayController } from "@/components/replay-controller"
 import { ReplayPanel } from "@/components/replay-panel"
 import { SettingsPage } from "@/components/settings-page"
 import { TripTable } from "@/components/trip-table"
+import { AuthImage } from "@/components/auth-image"
 import { useFleet, type View } from "@/hooks/use-fleet"
 import { useTheme } from "@/components/theme-provider"
 import {
@@ -47,6 +50,11 @@ import {
 
 export function App() {
   const fleet = useFleet()
+
+  function deviceImageUrl(uniqueId: string, filename: string) {
+    return `/api/media/${uniqueId}/${filename}`
+  }
+
   const [view, setView] = useState<View>("live")
   const [showSettings, setShowSettings] = useState(false)
   const mapRef = useRef<MapRef | null>(null)
@@ -54,6 +62,30 @@ export function App() {
   const isDark = theme === "dark"
   const lastFlewToDeviceId = useRef<number | null>(null)
   const [replayCollapsed, setReplayCollapsed] = useState(false)
+  const [mapZoom, setMapZoom] = useState(11.2)
+
+  const CLUSTER_MAX_ZOOM = 10
+
+  const deviceClusterData = useMemo(
+    (): GeoJSON.FeatureCollection<GeoJSON.Point, { deviceId: number }> => ({
+      type: "FeatureCollection",
+      features: fleet.devices.flatMap((device) => {
+        const position = fleet.positionsByDevice.get(device.id)
+        if (!position) return []
+        return [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [position.longitude, position.latitude],
+            },
+            properties: { deviceId: device.id },
+          },
+        ]
+      }),
+    }),
+    [fleet.devices, fleet.positionsByDevice]
+  )
 
   const toggleTheme = () => {
     setTheme(isDark ? "light" : "dark")
@@ -122,6 +154,20 @@ export function App() {
 
   // The "played so far" slice for the trail behind the moving marker
   const playedCoordinates = routeCoordinates.slice(0, fleet.playbackIndex + 1)
+
+  const showLogin = !fleet.user
+
+  if (showLogin) {
+    return (
+      <div className="flex h-svh w-svw flex-col items-center justify-center overflow-hidden bg-muted/40 text-sm">
+        <SettingsPage
+          connectionState={fleet.connectionState}
+          connectionError={fleet.connectionError}
+          onConnect={fleet.handleConnect}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-svh w-svw flex-col overflow-hidden text-sm">
@@ -199,6 +245,14 @@ export function App() {
           >
             <Settings className="size-4" />
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fleet.handleLogout}
+            title="Log out"
+          >
+            <LogOut className="size-4" />
+          </Button>
         </div>
       </header>
 
@@ -220,6 +274,7 @@ export function App() {
             center={[120.9842, 14.5986]}
             zoom={11.2}
             attributionControl={false}
+            onViewportChange={(vp) => setMapZoom(vp.zoom)}
           >
             <MapControls
               position="bottom-right"
@@ -229,8 +284,24 @@ export function App() {
               showFullscreen
             />
 
-            {/* Live markers */}
+            {/* Live cluster layer (zoomed out) */}
+            {view === "live" && (
+              <MapClusterLayer
+                data={deviceClusterData}
+                clusterMaxZoom={CLUSTER_MAX_ZOOM}
+                clusterRadius={60}
+                clusterColors={["#0d9488", "#0891b2", "#6366f1"]}
+                clusterThresholds={[10, 25]}
+                pointColor="transparent"
+                onPointClick={(feature) =>
+                  fleet.setSelectedDeviceId(feature.properties.deviceId)
+                }
+              />
+            )}
+
+            {/* Live markers (zoomed in) */}
             {view === "live" &&
+              mapZoom > CLUSTER_MAX_ZOOM &&
               fleet.devices.map((device) => {
                 const position = fleet.positionsByDevice.get(device.id)
                 if (!position) return null
@@ -245,13 +316,20 @@ export function App() {
                   >
                     <MarkerContent>
                       <div
-                        className={`flex size-10 cursor-pointer items-center justify-center rounded-full border-4 transition-transform hover:scale-110 ${
+                        className={`relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 transition-transform hover:scale-110 ${
                           active
                             ? "border-primary/20 bg-primary text-primary-foreground"
                             : "border-background/80 bg-background text-foreground"
                         } shadow-xl`}
                       >
                         <Truck className="size-4" />
+                        {typeof device.attributes?.deviceImage === "string" && (
+                          <AuthImage
+                            src={deviceImageUrl(device.uniqueId, device.attributes.deviceImage)}
+                            alt={device.name}
+                            className="absolute inset-0 z-10 size-full bg-background object-cover"
+                          />
+                        )}
                       </div>
                       <MarkerLabel position="bottom">
                         {device.name.split(",")[0]}
@@ -259,13 +337,27 @@ export function App() {
                     </MarkerContent>
                     <MarkerPopup className="w-64 p-0">
                       <div className="space-y-2 p-3">
-                        <div>
-                          <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                            {device.category ?? "Device"}
-                          </span>
-                          <h3 className="leading-tight font-semibold text-foreground">
-                            {device.name}
-                          </h3>
+                        <div className="flex gap-3">
+                          <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted">
+                            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                              <Truck className="size-5" />
+                            </div>
+                            {typeof device.attributes?.deviceImage === "string" && (
+                              <AuthImage
+                                src={deviceImageUrl(device.uniqueId, device.attributes.deviceImage)}
+                                alt={device.name}
+                                className="absolute inset-0 z-10 size-full bg-background object-cover"
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                              {device.category ?? "Device"}
+                            </span>
+                            <h3 className="leading-tight font-semibold text-foreground">
+                              {device.name}
+                            </h3>
+                          </div>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">
@@ -357,8 +449,15 @@ export function App() {
                 <MarkerContent>
                   <div className="relative flex size-10 items-center justify-center">
                     <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
-                    <div className="relative flex size-10 cursor-pointer items-center justify-center rounded-full border-4 border-primary/30 bg-primary text-primary-foreground shadow-xl">
+                    <div className="relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-primary/30 bg-primary text-primary-foreground shadow-xl">
                       <Truck className="size-4" />
+                      {typeof fleet.selectedDevice?.attributes?.deviceImage === "string" && (
+                        <AuthImage
+                          src={deviceImageUrl(fleet.selectedDevice.uniqueId, fleet.selectedDevice.attributes.deviceImage)}
+                          alt={fleet.selectedDevice.name}
+                          className="absolute inset-0 z-10 size-full bg-background object-cover"
+                        />
+                      )}
                     </div>
                   </div>
                   <MarkerLabel position="bottom">
