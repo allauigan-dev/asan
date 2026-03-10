@@ -159,11 +159,12 @@ export function App() {
 
   if (showLogin) {
     return (
-      <div className="flex h-svh w-svw flex-col items-center justify-center overflow-hidden bg-muted/40 text-sm">
+      <div className="flex h-svh w-svw overflow-hidden text-sm">
         <SettingsPage
           connectionState={fleet.connectionState}
           connectionError={fleet.connectionError}
           onConnect={fleet.handleConnect}
+          loginMode
         />
       </div>
     )
@@ -256,8 +257,22 @@ export function App() {
         </div>
       </header>
 
+      {/* ── Body: settings page or main content ── */}
+      {showSettings ? (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <SettingsPage
+            connectionState={fleet.connectionState}
+            connectionError={fleet.connectionError}
+            onConnect={(form) => {
+              fleet.handleConnect(form)
+            }}
+            onClose={() => setShowSettings(false)}
+          />
+        </div>
+      ) : null}
+
       {/* ── Body: left sidebar | map | right sidebar ── */}
-      <div className="flex min-h-0 flex-1">
+      <div className={`flex min-h-0 flex-1 ${showSettings ? "hidden" : ""}`}>
         {/* Left sidebar — Fleet list */}
         <FleetSidebar
           devices={fleet.devices}
@@ -589,19 +604,6 @@ export function App() {
             </aside>
           ))}
       </div>
-
-      {/* Settings modal */}
-      {showSettings && (
-        <SettingsPage
-          connectionState={fleet.connectionState}
-          connectionError={fleet.connectionError}
-          onConnect={(form) => {
-            fleet.handleConnect(form)
-            setShowSettings(false)
-          }}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
 
       {/* Connection error toast */}
       {fleet.connectionError && !showSettings && (
