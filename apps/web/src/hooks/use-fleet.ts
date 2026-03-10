@@ -160,9 +160,7 @@ export function useFleet() {
   }, [fleet.devices, positionsByDevice])
 
   const selectedDevice =
-    devices.find((device) => device.id === selectedDeviceId) ??
-    devices[0] ??
-    null
+    devices.find((device) => device.id === selectedDeviceId) ?? null
   const selectedPosition = selectedDevice
     ? (positionsByDevice.get(selectedDevice.id) ?? null)
     : null
@@ -260,13 +258,6 @@ export function useFleet() {
     if (distance < 1000) return []
     return trail
   }, [selectedDeviceId, trailVersion])
-
-  // Auto-select first device
-  useEffect(() => {
-    if (!selectedDevice && devices[0]) {
-      setSelectedDeviceId(devices[0].id)
-    }
-  }, [devices, selectedDevice])
 
   // Fetch route history for the selected device to seed live trail
   useEffect(() => {
@@ -438,9 +429,7 @@ export function useFleet() {
     }))
 
     const nextDeviceId =
-      safeDevices.find((item) => item.id === selectedDeviceId)?.id ??
-      safeDevices[0]?.id ??
-      0
+      safeDevices.find((item) => item.id === selectedDeviceId)?.id ?? 0
 
     if (nextDeviceId && nextDeviceId !== selectedDeviceId) {
       setSelectedDeviceId(nextDeviceId)

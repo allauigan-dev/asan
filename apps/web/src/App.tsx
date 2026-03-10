@@ -267,7 +267,15 @@ export function App() {
         />
 
         {/* Center — Map */}
-        <div className="relative min-w-0 flex-1">
+        <div
+          className="relative min-w-0 flex-1"
+          onClick={(e) => {
+            const canvas = mapRef.current?.getCanvas()
+            if (canvas && e.target === canvas) {
+              fleet.setSelectedDeviceId(0)
+            }
+          }}
+        >
           <Map
             ref={mapRef}
             className="absolute inset-0 h-full w-full"
