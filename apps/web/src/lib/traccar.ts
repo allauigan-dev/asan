@@ -34,11 +34,14 @@ export type TraccarDevice = {
   name: string
   uniqueId: string
   status?: string
+  disabled?: boolean
   lastUpdate?: string
   positionId?: number
-  category?: string
-  model?: string
-  contact?: string
+  groupId?: number | null
+  phone?: string | null
+  model?: string | null
+  contact?: string | null
+  category?: string | null
   attributes?: Record<string, unknown>
 }
 
@@ -116,7 +119,7 @@ export type RealtimePayload = {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "DELETE"
+  method?: "GET" | "POST" | "PUT" | "DELETE"
   query?: URLSearchParams
   body?: BodyInit | null
   headers?: HeadersInit
@@ -359,6 +362,50 @@ function getDevices(config: TraccarConfig) {
   return request<TraccarDevice[]>(config, "/devices")
 }
 
+function createDevice(config: TraccarConfig, device: Omit<TraccarDevice, "id">) {
+  return request<TraccarDevice>(config, "/devices", {
+    method: "POST",
+    body: JSON.stringify(device),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateDevice(config: TraccarConfig, id: number, device: TraccarDevice) {
+  return request<TraccarDevice>(config, `/devices/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(device),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteDevice(config: TraccarConfig, id: number) {
+  return request<void>(config, `/devices/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export type TraccarGroup = {
+  id: number
+  name: string
+  groupId?: number
+  attributes?: Record<string, unknown>
+}
+
+function getGroups(config: TraccarConfig) {
+  return request<TraccarGroup[]>(config, "/groups")
+}
+
+export type TraccarCalendar = {
+  id: number
+  name: string
+  data?: string
+  attributes?: Record<string, unknown>
+}
+
+function getCalendars(config: TraccarConfig) {
+  return request<TraccarCalendar[]>(config, "/calendars")
+}
+
 function getPositions(config: TraccarConfig) {
   return request<TraccarPosition[]>(config, "/positions")
 }
@@ -492,8 +539,12 @@ function parseRealtimePayload(raw: string): RealtimePayload {
 }
 
 export {
+  createDevice,
+  deleteDevice,
+  getCalendars,
   getDevices,
   getEvents,
+  getGroups,
   getPositionHistory,
   getPositions,
   getRouteReport,
@@ -512,5 +563,6 @@ export {
   revokeToken,
   toRealtimeUrl,
   triggerServerGc,
+  updateDevice,
   updateServer,
 }

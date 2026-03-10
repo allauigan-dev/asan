@@ -197,4 +197,89 @@ export const LogOut = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const Plus = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M12 5v14M5 12h14" />
+  </IconBase>
+)
+
+export const Car = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M14 16H9m10 0h3l-3-4h-2.5M7 16H4m0 0v-5l2-6h12l2 6v5M4 16l1.5-4.5m13 4.5-1.5-4.5" />
+    <circle cx="7" cy="16" r="1.5" />
+    <circle cx="17" cy="16" r="1.5" />
+  </IconBase>
+)
+
+export const Bike = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="5.5" cy="17.5" r="3.5" />
+    <circle cx="18.5" cy="17.5" r="3.5" />
+    <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+    <path d="m12 17.5 3.5-7 1.5.5-2 5.5" />
+    <path d="M6 15.5 12 6l4 1" />
+  </IconBase>
+)
+
+export const Bus = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M8 6v6M16 6v6M2 12h19.5M4.5 17.5h15M6 20v-2M18 20v-2" />
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+  </IconBase>
+)
+
+export const Ship = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M2 21a3 3 0 1 0 6 0M22 21a3 3 0 1 1-6 0M6 21V7M18 21V7M6 4h12" />
+    <path d="M6 4 4 7M18 4l2 3" />
+  </IconBase>
+)
+
+export const Plane = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
+  </IconBase>
+)
+
+export const Train = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <rect x="4" y="3" width="16" height="16" rx="2" />
+    <path d="M4 11h16M12 3v8M8 19l-2 3M16 19l2 3" />
+    <circle cx="9" cy="15" r="1" />
+    <circle cx="15" cy="15" r="1" />
+  </IconBase>
+)
+
+export const Person = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="8" r="5" />
+    <path d="M20 21a8 8 0 1 0-16 0" />
+  </IconBase>
+)
+
+export const Tractor = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="7" cy="15" r="4" />
+    <circle cx="18" cy="17" r="2" />
+    <path d="M11 15h4v-4l-4-2V6h-1V4h2" />
+    <path d="M7 15h4" />
+  </IconBase>
+)
+
+export const Boat = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M2 21a3 3 0 1 0 6 0M22 21a3 3 0 1 1-6 0" />
+    <path d="M6 21V7l-4 4M18 21V7l4 4" />
+    <path d="M6 4h12v3H6z" />
+  </IconBase>
+)
+
+export const Helicopter = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M3 10h18M10 10V3h4v7" />
+    <rect x="6" y="10" width="12" height="6" rx="2" />
+    <path d="M6 16v3M18 16v3M9 19h6M2 3h20" />
+  </IconBase>
+)
+
 export type { IconProps }

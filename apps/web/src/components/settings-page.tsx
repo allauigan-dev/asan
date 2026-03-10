@@ -8,6 +8,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import {
   Select,
@@ -19,22 +26,33 @@ import {
 
 import {
   ChevronLeft,
+  ChevronRight,
+  Plus,
   Server,
   ShieldCheck,
+  Truck,
 } from "@/components/icons"
 import { readStoredConfig, toConfig, type ConnectionForm } from "@/lib/config"
+import { getDeviceIcon } from "@/lib/utils"
 import {
+  createDevice,
+  deleteDevice,
+  getDevices,
+  getGroups,
   getServer,
   getServerCache,
   rebootServer,
   triggerServerGc,
+  updateDevice,
   updateServer,
+  type TraccarDevice,
+  type TraccarGroup,
   type TraccarServer,
 } from "@/lib/traccar"
 import type { AuthMode } from "@/lib/traccar"
 import type { ConnectionState } from "@/hooks/use-fleet"
 
-type SettingsTab = "connection" | "server"
+type SettingsTab = "connection" | "server" | "devices"
 
 type SettingsPageProps = {
   connectionState: ConnectionState
@@ -124,6 +142,13 @@ export function SettingsPage({
             onClick={() => setActiveTab("server")}
             disabled={!isConnected}
           />
+          <NavItem
+            icon={<Truck className="size-4" />}
+            label="Devices"
+            active={activeTab === "devices"}
+            onClick={() => setActiveTab("devices")}
+            disabled={!isConnected}
+          />
         </nav>
       </aside>
 
@@ -142,6 +167,9 @@ export function SettingsPage({
         )}
         {activeTab === "server" && isConnected && (
           <ServerTab connectionForm={form} />
+        )}
+        {activeTab === "devices" && isConnected && (
+          <DevicesTab connectionForm={form} />
         )}
       </div>
     </div>
@@ -765,6 +793,485 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ── Devices tab ───────────────────────────────────────────────────────────────
+
+const DEVICE_CATEGORIES = [
+  "default",
+  "animal",
+  "bicycle",
+  "boat",
+  "bus",
+  "car",
+  "crane",
+  "helicopter",
+  "motorcycle",
+  "offroad",
+  "person",
+  "pickup",
+  "plane",
+  "ship",
+  "tractor",
+  "train",
+  "tram",
+  "trolleybus",
+  "truck",
+  "van",
+] as const
+
+type DevicesTabState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | {
+      status: "loaded"
+      devices: TraccarDevice[]
+    }
+
+function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
+  const [state, setState] = useState<DevicesTabState>({ status: "loading" })
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [editingDevice, setEditingDevice] = useState<TraccarDevice | null>(null)
+
+  function loadDevices() {
+    setState({ status: "loading" })
+    const config = toConfig(connectionForm)
+    getDevices(config)
+      .then((devices) => {
+        setState({
+          status: "loaded",
+          devices,
+        })
+      })
+      .catch((err: unknown) => {
+        setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+      })
+  }
+
+  useEffect(() => {
+    loadDevices()
+  }, [connectionForm])
+
+  function handleDeviceAdded() {
+    setIsAddDialogOpen(false)
+    loadDevices()
+  }
+
+  function handleDeviceUpdated() {
+    setEditingDevice(null)
+    loadDevices()
+  }
+
+  if (state.status === "loading") {
+    return (
+      <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+        Loading devices…
+      </div>
+    )
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="mx-auto w-full max-w-lg">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {state.message}
+        </div>
+      </div>
+    )
+  }
+
+  const { devices } = state
+
+  return (
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      <div>
+        <h2 className="font-display text-lg font-bold">Devices</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Manage devices registered on your Traccar server.
+        </p>
+      </div>
+
+      {devices.length === 0 ? (
+        <Card className="border-border/50">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Truck className="size-12 text-muted-foreground/30 mb-4" />
+            <p className="text-sm font-medium text-muted-foreground mb-1">No devices found</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Add your first device to start tracking
+            </p>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="size-4" />
+              Add Device
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-border/50">
+          <CardContent className="p-0">
+            <div className="divide-y divide-border/40">
+              {devices.map((device) => {
+                const DeviceIcon = getDeviceIcon(device.category)
+                return (
+                  <button
+                    key={device.id}
+                    onClick={() => setEditingDevice(device)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <DeviceIcon className="size-5 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {device.name}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="truncate">{device.uniqueId}</span>
+                          {device.category && (
+                            <>
+                              <span>•</span>
+                              <span className="capitalize">{device.category}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {device.status && (
+                      <span
+                        className={`text-xs font-medium px-2 py-1 rounded ${
+                          device.status === "online"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : device.status === "offline"
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                        }`}
+                      >
+                        {device.status}
+                      </span>
+                    )}
+                    {device.disabled && (
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-destructive/10 text-destructive">
+                        Disabled
+                      </span>
+                    )}
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </div>
+                </button>
+              )})}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Floating Action Button */}
+      {devices.length > 0 && (
+        <button
+          onClick={() => setIsAddDialogOpen(true)}
+          className="fixed bottom-8 right-8 size-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center z-40"
+          aria-label="Add device"
+        >
+          <Plus className="size-6" />
+        </button>
+      )}
+
+      {/* Add Device Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Device</DialogTitle>
+            <DialogDescription>
+              Enter device information to register it with your tracking server.
+            </DialogDescription>
+          </DialogHeader>
+          <DeviceForm
+            connectionForm={connectionForm}
+            onSuccess={handleDeviceAdded}
+            onCancel={() => setIsAddDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Device Dialog */}
+      <Dialog open={!!editingDevice} onOpenChange={(open) => !open && setEditingDevice(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Device</DialogTitle>
+            <DialogDescription>
+              Update device information and settings.
+            </DialogDescription>
+          </DialogHeader>
+          {editingDevice && (
+            <DeviceForm
+              connectionForm={connectionForm}
+              device={editingDevice}
+              onSuccess={handleDeviceUpdated}
+              onCancel={() => setEditingDevice(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ── Device Form (Add/Edit) ───────────────────────────────────────────────────
+
+type DeviceFormState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | {
+      status: "loaded"
+      groups: TraccarGroup[]
+      form: TraccarDevice
+      saving: boolean
+      deleting: boolean
+    }
+
+function DeviceForm({
+  connectionForm,
+  device,
+  onSuccess,
+  onCancel,
+}: {
+  connectionForm: ConnectionForm
+  device?: TraccarDevice
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const [state, setState] = useState<DeviceFormState>({ status: "loading" })
+  const isEditing = !!device
+
+  useEffect(() => {
+    const config = toConfig(connectionForm)
+    getGroups(config)
+      .then((groups) => {
+        setState({
+          status: "loaded",
+          groups,
+          form: device ?? {
+            id: 0,
+            name: "",
+            uniqueId: "",
+          },
+          saving: false,
+          deleting: false,
+        })
+      })
+      .catch((err: unknown) => {
+        setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+      })
+  }, [connectionForm, device])
+
+  if (state.status === "loading") {
+    return (
+      <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+        Loading form…
+      </div>
+    )
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        {state.message}
+      </div>
+    )
+  }
+
+  const { groups, form, saving, deleting } = state
+
+  function setForm(patch: Partial<typeof form>) {
+    setState((prev) => {
+      if (prev.status !== "loaded") return prev
+      return { ...prev, form: { ...prev.form, ...patch } }
+    })
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (state.status !== "loaded") return
+
+    if (!form.name || !form.uniqueId) {
+      setState({ status: "error", message: "Name and Unique ID are required" })
+      return
+    }
+
+    setState((prev) => (prev.status === "loaded" ? { ...prev, saving: true } : prev))
+    try {
+      const config = toConfig(connectionForm)
+
+      if (isEditing) {
+        await updateDevice(config, form.id, form)
+      } else {
+        const deviceData: Omit<TraccarDevice, "id"> = {
+          name: form.name,
+          uniqueId: form.uniqueId,
+          ...(form.category && { category: form.category }),
+          ...(form.groupId !== undefined && { groupId: form.groupId }),
+          ...(form.phone && { phone: form.phone }),
+          ...(form.model && { model: form.model }),
+          ...(form.contact && { contact: form.contact }),
+          ...(form.disabled !== undefined && { disabled: form.disabled }),
+          ...(form.attributes && Object.keys(form.attributes).length > 0 && { attributes: form.attributes }),
+        }
+        await createDevice(config, deviceData)
+      }
+      onSuccess()
+    } catch (err: unknown) {
+      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+    }
+  }
+
+  async function handleDelete() {
+    if (!isEditing || state.status !== "loaded") return
+    if (!confirm(`Delete device "${form.name}"? This action cannot be undone.`)) return
+
+    setState((prev) => (prev.status === "loaded" ? { ...prev, deleting: true } : prev))
+    try {
+      const config = toConfig(connectionForm)
+      await deleteDevice(config, form.id)
+      onSuccess()
+    } catch (err: unknown) {
+      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Required fields */}
+      <div className="space-y-4">
+        <FieldRow label="Name" description="Device name or identifier (required)">
+          <Input
+            value={form.name ?? ""}
+            onChange={(e) => setForm({ name: e.target.value })}
+            placeholder="My Vehicle"
+            required
+            disabled={saving || deleting}
+            autoFocus
+          />
+        </FieldRow>
+        <FieldRow label="Unique ID" description="Device hardware identifier (IMEI, serial number, etc.) (required)">
+          <Input
+            value={form.uniqueId ?? ""}
+            onChange={(e) => setForm({ uniqueId: e.target.value })}
+            placeholder="123456789012345"
+            required
+            disabled={saving || deleting || isEditing}
+          />
+        </FieldRow>
+      </div>
+
+      {/* Optional fields */}
+      <div className="space-y-4 border-t border-border/30 pt-4">
+        <p className="text-xs font-medium text-muted-foreground">Optional Information</p>
+
+        <FieldRow label="Category" description="Device type for map icon">
+          <Select
+            value={form.category ?? "none"}
+            onValueChange={(value) => setForm({
+              category: value === "none" ? undefined : value
+            })}
+            disabled={saving || deleting}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No category</SelectItem>
+              {DEVICE_CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FieldRow>
+
+        {groups.length > 0 && (
+          <FieldRow label="Group" description="Associate device with a group">
+            <Select
+              value={form.groupId?.toString() ?? "none"}
+              onValueChange={(value) => setForm({
+                groupId: value === "none" ? undefined : Number(value)
+              })}
+              disabled={saving || deleting}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="No group" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No group</SelectItem>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id.toString()}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldRow>
+        )}
+
+        <FieldRow label="Phone Number" description="Contact phone number for SMS commands">
+          <Input
+            value={form.phone ?? ""}
+            onChange={(e) => setForm({ phone: e.target.value })}
+            placeholder="+1234567890"
+            type="tel"
+            disabled={saving || deleting}
+          />
+        </FieldRow>
+
+        <FieldRow label="Model" description="Device model name">
+          <Input
+            value={form.model ?? ""}
+            onChange={(e) => setForm({ model: e.target.value })}
+            placeholder="GPS Tracker Pro"
+            disabled={saving || deleting}
+          />
+        </FieldRow>
+
+        <FieldRow label="Contact" description="Contact person or information">
+          <Input
+            value={form.contact ?? ""}
+            onChange={(e) => setForm({ contact: e.target.value })}
+            placeholder="John Doe"
+            disabled={saving || deleting}
+          />
+        </FieldRow>
+
+        <ToggleRow
+          label="Disabled"
+          description="Mark device as disabled (typically for administrators)"
+          checked={!!form.disabled}
+          onChange={(v) => setForm({ disabled: v })}
+          disabled={saving || deleting}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/30">
+        {isEditing ? (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={saving || deleting}
+          >
+            {deleting ? "Deleting…" : "Delete Device"}
+          </Button>
+        ) : (
+          <div />
+        )}
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={saving || deleting}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={saving || deleting || !form.name || !form.uniqueId}>
+            <Plus className="size-4" />
+            {saving ? (isEditing ? "Saving…" : "Adding…") : (isEditing ? "Save Changes" : "Add Device")}
+          </Button>
+        </div>
+      </div>
+    </form>
   )
 }
 

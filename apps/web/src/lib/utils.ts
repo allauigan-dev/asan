@@ -3,6 +3,56 @@ import type {
   TraccarEvent,
   TraccarPosition,
 } from "@/lib/traccar"
+import {
+  Bike,
+  Boat,
+  Bus,
+  Car,
+  Helicopter,
+  Person,
+  Plane,
+  Ship,
+  Tractor,
+  Train,
+  Truck,
+  type IconProps,
+} from "@/components/icons"
+
+export function getDeviceIcon(category?: string | null): React.ComponentType<IconProps> {
+  switch (category) {
+    case "car":
+      return Car
+    case "bicycle":
+    case "motorcycle":
+      return Bike
+    case "bus":
+    case "trolleybus":
+      return Bus
+    case "truck":
+    case "pickup":
+    case "van":
+      return Truck
+    case "boat":
+      return Boat
+    case "ship":
+      return Ship
+    case "plane":
+      return Plane
+    case "helicopter":
+      return Helicopter
+    case "train":
+    case "tram":
+      return Train
+    case "person":
+      return Person
+    case "tractor":
+    case "crane":
+    case "offroad":
+      return Tractor
+    default:
+      return Truck
+  }
+}
 
 export function ensureArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []

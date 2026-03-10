@@ -29,7 +29,6 @@ import {
   Route,
   Settings,
   SunMedium,
-  Truck,
   Zap,
 } from "@/components/icons"
 import { LivePanel } from "@/components/live-panel"
@@ -44,6 +43,7 @@ import { useTheme } from "@/components/theme-provider"
 import {
   formatTimestamp,
   getBatteryLevel,
+  getDeviceIcon,
   relativeTime,
   toKph,
 } from "@/lib/utils"
@@ -330,6 +330,7 @@ export function App() {
                 if (!position) return null
                 const active = device.id === fleet.selectedDevice?.id
                 const battery = getBatteryLevel(position)
+                const DeviceIcon = getDeviceIcon(device.category)
                 return (
                   <MapMarker
                     key={device.id}
@@ -345,7 +346,7 @@ export function App() {
                             : "border-background/80 bg-background text-foreground"
                         } shadow-xl`}
                       >
-                        <Truck className="size-4" />
+                        <DeviceIcon className="size-4" />
                         {typeof device.attributes?.deviceImage === "string" && (
                           <AuthImage
                             src={deviceImageUrl(device.uniqueId, device.attributes.deviceImage)}
@@ -363,7 +364,7 @@ export function App() {
                         <div className="flex gap-3">
                           <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted">
                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                              <Truck className="size-5" />
+                              <DeviceIcon className="size-5" />
                             </div>
                             {typeof device.attributes?.deviceImage === "string" && (
                               <AuthImage
@@ -464,31 +465,34 @@ export function App() {
             )}
 
             {/* Animated vehicle marker — current playback position */}
-            {view === "replay" && fleet.currentPlaybackPosition && (
-              <MapMarker
-                longitude={fleet.currentPlaybackPosition.longitude}
-                latitude={fleet.currentPlaybackPosition.latitude}
-              >
-                <MarkerContent>
-                  <div className="relative flex size-10 items-center justify-center">
-                    <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
-                    <div className="relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-primary/30 bg-primary text-primary-foreground shadow-xl">
-                      <Truck className="size-4" />
-                      {typeof fleet.selectedDevice?.attributes?.deviceImage === "string" && (
-                        <AuthImage
-                          src={deviceImageUrl(fleet.selectedDevice.uniqueId, fleet.selectedDevice.attributes.deviceImage)}
-                          alt={fleet.selectedDevice.name}
-                          className="absolute inset-0 z-10 size-full bg-background object-cover"
-                        />
-                      )}
+            {view === "replay" && fleet.currentPlaybackPosition && fleet.selectedDevice && (() => {
+              const ReplayDeviceIcon = getDeviceIcon(fleet.selectedDevice.category)
+              return (
+                <MapMarker
+                  longitude={fleet.currentPlaybackPosition.longitude}
+                  latitude={fleet.currentPlaybackPosition.latitude}
+                >
+                  <MarkerContent>
+                    <div className="relative flex size-10 items-center justify-center">
+                      <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                      <div className="relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-primary/30 bg-primary text-primary-foreground shadow-xl">
+                        <ReplayDeviceIcon className="size-4" />
+                        {typeof fleet.selectedDevice?.attributes?.deviceImage === "string" && (
+                          <AuthImage
+                            src={deviceImageUrl(fleet.selectedDevice.uniqueId, fleet.selectedDevice.attributes.deviceImage)}
+                            alt={fleet.selectedDevice.name}
+                            className="absolute inset-0 z-10 size-full bg-background object-cover"
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <MarkerLabel position="bottom">
-                    {toKph(fleet.currentPlaybackPosition.speed)} km/h
-                  </MarkerLabel>
-                </MarkerContent>
-              </MapMarker>
-            )}
+                    <MarkerLabel position="bottom">
+                      {toKph(fleet.currentPlaybackPosition.speed)} km/h
+                    </MarkerLabel>
+                  </MarkerContent>
+                </MapMarker>
+              )
+            })()}
 
             {/* Replay event markers */}
             {view === "replay" &&
