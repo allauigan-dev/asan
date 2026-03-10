@@ -180,6 +180,15 @@ export const RotateCcw = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const Server = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <rect x="2" y="2" width="20" height="8" rx="2" />
+    <rect x="2" y="14" width="20" height="8" rx="2" />
+    <line x1="6" y1="6" x2="6.01" y2="6" strokeWidth="2" strokeLinecap="round" />
+    <line x1="6" y1="18" x2="6.01" y2="18" strokeWidth="2" strokeLinecap="round" />
+  </IconBase>
+)
+
 export const LogOut = ({ className }: IconProps) => (
   <IconBase className={className}>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

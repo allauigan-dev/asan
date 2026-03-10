@@ -87,6 +87,28 @@ export type TraccarReportSummary = {
   engineHours?: number
 }
 
+export type TraccarServer = {
+  id?: number
+  registration?: boolean
+  readonly?: boolean
+  deviceReadonly?: boolean
+  limitCommands?: boolean
+  map?: string
+  bingKey?: string
+  mapUrl?: string
+  poiLayer?: string
+  announcement?: string
+  latitude?: number
+  longitude?: number
+  zoom?: number
+  version?: string
+  forceSettings?: boolean
+  coordinateFormat?: string
+  openIdEnabled?: boolean
+  openIdForce?: boolean
+  attributes?: Record<string, unknown>
+}
+
 export type RealtimePayload = {
   devices?: TraccarDevice[]
   positions?: TraccarPosition[]
@@ -411,6 +433,18 @@ function getEvents(
   return request<TraccarEvent[]>(config, "/reports/events", { query })
 }
 
+function getServer(config: TraccarConfig) {
+  return request<TraccarServer>(config, "/server")
+}
+
+function updateServer(config: TraccarConfig, data: TraccarServer) {
+  return request<TraccarServer>(config, "/server", {
+    method: "PUT" as const,
+    body: JSON.stringify(data),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
 function toRealtimeUrl(config: TraccarConfig) {
   const url = new URL(normalizeWsUrl(config.wsUrl ?? "", config.serverUrl))
 
@@ -447,6 +481,7 @@ export {
   getPositionHistory,
   getPositions,
   getRouteReport,
+  getServer,
   getSession,
   getSummaryReport,
   getTripReport,
@@ -457,4 +492,5 @@ export {
   parseRealtimePayload,
   revokeToken,
   toRealtimeUrl,
+  updateServer,
 }
