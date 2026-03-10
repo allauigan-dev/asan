@@ -23,7 +23,14 @@ import {
   ShieldCheck,
 } from "@/components/icons"
 import { readStoredConfig, toConfig, type ConnectionForm } from "@/lib/config"
-import { getServer, updateServer, type TraccarServer } from "@/lib/traccar"
+import {
+  getServer,
+  getServerCache,
+  rebootServer,
+  triggerServerGc,
+  updateServer,
+  type TraccarServer,
+} from "@/lib/traccar"
 import type { AuthMode } from "@/lib/traccar"
 import type { ConnectionState } from "@/hooks/use-fleet"
 
@@ -369,7 +376,17 @@ function ConnectionForm({
 type ServerTabState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "loaded"; data: TraccarServer; draft: TraccarServer; saving: boolean; saved: boolean }
+  | {
+      status: "loaded"
+      data: TraccarServer
+      draft: TraccarServer
+      saving: boolean
+      saved: boolean
+      gcBusy: boolean
+      rebootBusy: boolean
+      cacheText: string | null
+      cacheBusy: boolean
+    }
 
 function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
   const [state, setState] = useState<ServerTabState>({ status: "loading" })
@@ -378,7 +395,17 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
     const config = toConfig(connectionForm)
     getServer(config)
       .then((data) => {
-        setState({ status: "loaded", data, draft: { ...data }, saving: false, saved: false })
+        setState({
+          status: "loaded",
+          data,
+          draft: { ...data },
+          saving: false,
+          saved: false,
+          gcBusy: false,
+          rebootBusy: false,
+          cacheText: null,
+          cacheBusy: false,
+        })
       })
       .catch((err: unknown) => {
         setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
@@ -403,7 +430,7 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
     )
   }
 
-  const { data, draft, saving, saved } = state
+  const { data, draft, saving, saved, gcBusy, rebootBusy, cacheText, cacheBusy } = state
 
   function setDraft(patch: Partial<TraccarServer>) {
     setState((prev) => {
@@ -419,12 +446,49 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
     try {
       const config = toConfig(connectionForm)
       const updated = await updateServer(config, draft)
-      setState({ status: "loaded", data: updated, draft: { ...updated }, saving: false, saved: true })
+      setState((prev) =>
+        prev.status === "loaded"
+          ? { ...prev, data: updated, draft: { ...updated }, saving: false, saved: true }
+          : prev
+      )
+    } catch (err: unknown) {
+      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+    }
+  }
+
+  async function handleGc() {
+    setState((prev) => (prev.status === "loaded" ? { ...prev, gcBusy: true } : prev))
+    try {
+      const config = toConfig(connectionForm)
+      await triggerServerGc(config)
+    } finally {
+      setState((prev) => (prev.status === "loaded" ? { ...prev, gcBusy: false } : prev))
+    }
+  }
+
+  async function handleFetchCache() {
+    setState((prev) => (prev.status === "loaded" ? { ...prev, cacheBusy: true, cacheText: null } : prev))
+    try {
+      const config = toConfig(connectionForm)
+      const text = await getServerCache(config)
+      setState((prev) => (prev.status === "loaded" ? { ...prev, cacheBusy: false, cacheText: String(text) } : prev))
     } catch (err: unknown) {
       setState((prev) =>
-        prev.status === "loaded" ? { ...prev, saving: false } : prev
+        prev.status === "loaded"
+          ? { ...prev, cacheBusy: false, cacheText: `Error: ${err instanceof Error ? err.message : String(err)}` }
+          : prev
       )
-      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+    }
+  }
+
+  async function handleReboot() {
+    if (!confirm("Reboot the Traccar server process? It will be briefly unavailable.")) return
+    setState((prev) => (prev.status === "loaded" ? { ...prev, rebootBusy: true } : prev))
+    try {
+      const config = toConfig(connectionForm)
+      await rebootServer(config)
+    } finally {
+      setState((prev) => (prev.status === "loaded" ? { ...prev, rebootBusy: false } : prev))
     }
   }
 
@@ -526,6 +590,22 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
+            <FieldRow label="Bing Maps Key" description="API key used when Bing is selected as the map provider">
+              <Input
+                value={draft.bingKey ?? ""}
+                onChange={(e) => setDraft({ bingKey: e.target.value })}
+                placeholder="Bing Maps API key"
+                disabled={saving || !!isReadonly}
+              />
+            </FieldRow>
+            <FieldRow label="POI Layer" description="External point-of-interest layer configuration">
+              <Input
+                value={draft.poiLayer ?? ""}
+                onChange={(e) => setDraft({ poiLayer: e.target.value })}
+                placeholder="POI layer URL or config"
+                disabled={saving || !!isReadonly}
+              />
+            </FieldRow>
           </CardContent>
         </Card>
 
@@ -570,6 +650,22 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
               onChange={(v) => setDraft({ forceSettings: v })}
               disabled={saving || !!isReadonly}
             />
+            <ToggleRow
+              label="Force OpenID"
+              description="Require OpenID authentication for all users"
+              checked={!!draft.openIdForce}
+              onChange={(v) => setDraft({ openIdForce: v })}
+              disabled={saving || !!isReadonly || !data.openIdEnabled}
+            />
+            {data.openIdEnabled !== undefined && (
+              <p className="pl-7 text-[11px] text-muted-foreground">
+                OpenID is{" "}
+                <span className={data.openIdEnabled ? "text-emerald-600 dark:text-emerald-400" : ""}>
+                  {data.openIdEnabled ? "enabled" : "not configured"}
+                </span>{" "}
+                on this server.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -590,6 +686,84 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
           </div>
         )}
       </form>
+
+      {/* Admin actions section */}
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Admin Actions</CardTitle>
+          <CardDescription className="text-xs">
+            Maintenance operations for the Traccar server process.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Garbage collection */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-foreground">Garbage Collection</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Trigger JVM garbage collection to free unused memory.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleGc}
+              disabled={gcBusy}
+              className="shrink-0"
+            >
+              {gcBusy ? "Running…" : "Run GC"}
+            </Button>
+          </div>
+
+          {/* Cache diagnostics */}
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-foreground">Cache Diagnostics</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Fetch internal cache statistics from the server.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleFetchCache}
+                disabled={cacheBusy}
+                className="shrink-0"
+              >
+                {cacheBusy ? "Fetching…" : "Fetch"}
+              </Button>
+            </div>
+            {cacheText && (
+              <pre className="max-h-48 overflow-auto rounded-md border border-border/50 bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+                {cacheText}
+              </pre>
+            )}
+          </div>
+
+          {/* Reboot */}
+          <div className="flex items-start justify-between gap-4 border-t border-border/40 pt-4">
+            <div>
+              <p className="text-xs font-medium text-destructive">Reboot Server</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Restart the Traccar server process. The server will be briefly unavailable.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleReboot}
+              disabled={rebootBusy}
+              className="shrink-0"
+            >
+              {rebootBusy ? "Rebooting…" : "Reboot"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

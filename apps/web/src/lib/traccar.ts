@@ -445,6 +445,22 @@ function updateServer(config: TraccarConfig, data: TraccarServer) {
   })
 }
 
+function getServerTimezones(config: TraccarConfig) {
+  return request<string[]>(config, "/server/timezones")
+}
+
+function getServerCache(config: TraccarConfig) {
+  return request<string>(config, "/server/cache")
+}
+
+function triggerServerGc(config: TraccarConfig) {
+  return request<void>(config, "/server/gc")
+}
+
+function rebootServer(config: TraccarConfig) {
+  return request<void>(config, "/server/reboot", { method: "POST" })
+}
+
 function toRealtimeUrl(config: TraccarConfig) {
   const url = new URL(normalizeWsUrl(config.wsUrl ?? "", config.serverUrl))
 
@@ -482,6 +498,8 @@ export {
   getPositions,
   getRouteReport,
   getServer,
+  getServerCache,
+  getServerTimezones,
   getSession,
   getSummaryReport,
   getTripReport,
@@ -490,7 +508,9 @@ export {
   normalizeServerUrl,
   normalizeWsUrl,
   parseRealtimePayload,
+  rebootServer,
   revokeToken,
   toRealtimeUrl,
+  triggerServerGc,
   updateServer,
 }
