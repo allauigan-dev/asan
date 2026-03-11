@@ -31,7 +31,7 @@ import {
   SunMedium,
   Zap,
 } from "@/components/icons"
-import { LivePanel } from "@/components/live-panel"
+import { LiveTelemetryPanel } from "@/components/live-telemetry-panel"
 import { MetricBar } from "@/components/metric-bar"
 import { ReplayController } from "@/components/replay-controller"
 import { ReplayPanel } from "@/components/replay-panel"
@@ -349,7 +349,10 @@ export function App() {
                         <DeviceIcon className="size-4" />
                         {typeof device.attributes?.deviceImage === "string" && (
                           <AuthImage
-                            src={deviceImageUrl(device.uniqueId, device.attributes.deviceImage)}
+                            src={deviceImageUrl(
+                              device.uniqueId,
+                              device.attributes.deviceImage
+                            )}
                             alt={device.name}
                             className="absolute inset-0 z-10 size-full bg-background object-cover"
                           />
@@ -366,9 +369,13 @@ export function App() {
                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                               <DeviceIcon className="size-5" />
                             </div>
-                            {typeof device.attributes?.deviceImage === "string" && (
+                            {typeof device.attributes?.deviceImage ===
+                              "string" && (
                               <AuthImage
-                                src={deviceImageUrl(device.uniqueId, device.attributes.deviceImage)}
+                                src={deviceImageUrl(
+                                  device.uniqueId,
+                                  device.attributes.deviceImage
+                                )}
                                 alt={device.name}
                                 className="absolute inset-0 z-10 size-full bg-background object-cover"
                               />
@@ -465,34 +472,43 @@ export function App() {
             )}
 
             {/* Animated vehicle marker — current playback position */}
-            {view === "replay" && fleet.currentPlaybackPosition && fleet.selectedDevice && (() => {
-              const ReplayDeviceIcon = getDeviceIcon(fleet.selectedDevice.category)
-              return (
-                <MapMarker
-                  longitude={fleet.currentPlaybackPosition.longitude}
-                  latitude={fleet.currentPlaybackPosition.latitude}
-                >
-                  <MarkerContent>
-                    <div className="relative flex size-10 items-center justify-center">
-                      <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
-                      <div className="relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-primary/30 bg-primary text-primary-foreground shadow-xl">
-                        <ReplayDeviceIcon className="size-4" />
-                        {typeof fleet.selectedDevice?.attributes?.deviceImage === "string" && (
-                          <AuthImage
-                            src={deviceImageUrl(fleet.selectedDevice.uniqueId, fleet.selectedDevice.attributes.deviceImage)}
-                            alt={fleet.selectedDevice.name}
-                            className="absolute inset-0 z-10 size-full bg-background object-cover"
-                          />
-                        )}
+            {view === "replay" &&
+              fleet.currentPlaybackPosition &&
+              fleet.selectedDevice &&
+              (() => {
+                const ReplayDeviceIcon = getDeviceIcon(
+                  fleet.selectedDevice.category
+                )
+                return (
+                  <MapMarker
+                    longitude={fleet.currentPlaybackPosition.longitude}
+                    latitude={fleet.currentPlaybackPosition.latitude}
+                  >
+                    <MarkerContent>
+                      <div className="relative flex size-10 items-center justify-center">
+                        <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                        <div className="relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-primary/30 bg-primary text-primary-foreground shadow-xl">
+                          <ReplayDeviceIcon className="size-4" />
+                          {typeof fleet.selectedDevice?.attributes
+                            ?.deviceImage === "string" && (
+                            <AuthImage
+                              src={deviceImageUrl(
+                                fleet.selectedDevice.uniqueId,
+                                fleet.selectedDevice.attributes.deviceImage
+                              )}
+                              alt={fleet.selectedDevice.name}
+                              className="absolute inset-0 z-10 size-full bg-background object-cover"
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <MarkerLabel position="bottom">
-                      {toKph(fleet.currentPlaybackPosition.speed)} km/h
-                    </MarkerLabel>
-                  </MarkerContent>
-                </MapMarker>
-              )
-            })()}
+                      <MarkerLabel position="bottom">
+                        {toKph(fleet.currentPlaybackPosition.speed)} km/h
+                      </MarkerLabel>
+                    </MarkerContent>
+                  </MapMarker>
+                )
+              })()}
 
             {/* Replay event markers */}
             {view === "replay" &&
@@ -542,16 +558,18 @@ export function App() {
               onSetSpeed={fleet.handleSetPlaybackSpeed}
             />
           )}
-        </div>
 
-        {/* Right sidebar — Live telemetry */}
-        {view === "live" && (
-          <LivePanel
-            selectedDevice={fleet.selectedDevice}
-            selectedPosition={fleet.selectedPosition}
-            events={fleet.fleet.events}
-          />
-        )}
+          {/* Live telemetry floating panel */}
+          {view === "live" && (
+            <LiveTelemetryPanel
+              selectedDevice={fleet.selectedDevice}
+              selectedPosition={fleet.selectedPosition}
+              events={fleet.fleet.events}
+              onClose={() => fleet.setSelectedDeviceId(0)}
+              onViewReplay={() => setView("replay")}
+            />
+          )}
+        </div>
 
         {/* Right sidebar — Replay */}
         {view === "replay" &&

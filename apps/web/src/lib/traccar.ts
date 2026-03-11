@@ -197,7 +197,12 @@ async function request<T>(
 
   const contentType = response.headers.get("content-type") ?? ""
   if (contentType.includes("application/json")) {
-    return (await response.json()) as T
+    const text = await response.text()
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      return text as unknown as T
+    }
   }
 
   return (await response.text()) as T
@@ -362,7 +367,22 @@ function getDevices(config: TraccarConfig) {
   return request<TraccarDevice[]>(config, "/devices")
 }
 
-function createDevice(config: TraccarConfig, device: Omit<TraccarDevice, "id">) {
+function geocode(
+  config: TraccarConfig,
+  latitude: number,
+  longitude: number
+) {
+  const params = new URLSearchParams({
+    latitude: latitude.toString(),
+    longitude: longitude.toString(),
+  })
+  return request<string>(config, `/server/geocode?${params}`)
+}
+
+function createDevice(
+  config: TraccarConfig,
+  device: Omit<TraccarDevice, "id">
+) {
   return request<TraccarDevice>(config, "/devices", {
     method: "POST",
     body: JSON.stringify(device),
@@ -370,7 +390,11 @@ function createDevice(config: TraccarConfig, device: Omit<TraccarDevice, "id">) 
   })
 }
 
-function updateDevice(config: TraccarConfig, id: number, device: TraccarDevice) {
+function updateDevice(
+  config: TraccarConfig,
+  id: number,
+  device: TraccarDevice
+) {
   return request<TraccarDevice>(config, `/devices/${id}`, {
     method: "PUT",
     body: JSON.stringify(device),
@@ -541,6 +565,7 @@ function parseRealtimePayload(raw: string): RealtimePayload {
 export {
   createDevice,
   deleteDevice,
+  geocode,
   getCalendars,
   getDevices,
   getEvents,

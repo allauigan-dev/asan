@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx turbo:*)"
+      "Bash(npx turbo:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(pnpm format:*)"
     ]
   }
 }

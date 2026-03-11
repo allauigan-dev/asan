@@ -61,7 +61,7 @@ function MetricItem({
         <p className="text-[10px] leading-tight tracking-wider text-muted-foreground uppercase">
           {label}
         </p>
-        <p className="text-sm font-bold leading-tight">{value}</p>
+        <p className="text-sm leading-tight font-bold">{value}</p>
       </div>
     </div>
   )

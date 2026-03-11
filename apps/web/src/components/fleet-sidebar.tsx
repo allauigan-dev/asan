@@ -64,7 +64,7 @@ export function FleetSidebar({
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-border/40 bg-background">
       <div className="flex items-center justify-between border-b border-border/40 px-3 py-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
           Fleet
         </p>
         <Button

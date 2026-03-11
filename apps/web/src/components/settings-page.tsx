@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -153,25 +154,27 @@ export function SettingsPage({
       </aside>
 
       {/* Content area */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-muted/20 p-6">
-        {activeTab === "connection" && (
-          <ConnectionTab
-            form={form}
-            setForm={setForm}
-            isConnecting={isConnecting}
-            isTotpRequired={isTotpRequired}
-            connectionError={connectionError}
-            connectionState={connectionState}
-            onSubmit={handleSubmit}
-          />
-        )}
-        {activeTab === "server" && isConnected && (
-          <ServerTab connectionForm={form} />
-        )}
-        {activeTab === "devices" && isConnected && (
-          <DevicesTab connectionForm={form} />
-        )}
-      </div>
+      <ScrollArea className="flex-1 bg-muted/20">
+        <div className="p-6">
+          {activeTab === "connection" && (
+            <ConnectionTab
+              form={form}
+              setForm={setForm}
+              isConnecting={isConnecting}
+              isTotpRequired={isTotpRequired}
+              connectionError={connectionError}
+              connectionState={connectionState}
+              onSubmit={handleSubmit}
+            />
+          )}
+          {activeTab === "server" && isConnected && (
+            <ServerTab connectionForm={form} />
+          )}
+          {activeTab === "devices" && isConnected && (
+            <DevicesTab connectionForm={form} />
+          )}
+        </div>
+      </ScrollArea>
     </div>
   )
 }
@@ -436,7 +439,10 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
         })
       })
       .catch((err: unknown) => {
-        setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+        setState({
+          status: "error",
+          message: String(err instanceof Error ? err.message : err),
+        })
       })
   }, [connectionForm])
 
@@ -458,7 +464,16 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
     )
   }
 
-  const { data, draft, saving, saved, gcBusy, rebootBusy, cacheText, cacheBusy } = state
+  const {
+    data,
+    draft,
+    saving,
+    saved,
+    gcBusy,
+    rebootBusy,
+    cacheText,
+    cacheBusy,
+  } = state
 
   function setDraft(patch: Partial<TraccarServer>) {
     setState((prev) => {
@@ -470,53 +485,89 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
   async function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (state.status !== "loaded") return
-    setState((prev) => (prev.status === "loaded" ? { ...prev, saving: true, saved: false } : prev))
+    setState((prev) =>
+      prev.status === "loaded" ? { ...prev, saving: true, saved: false } : prev
+    )
     try {
       const config = toConfig(connectionForm)
       const updated = await updateServer(config, draft)
       setState((prev) =>
         prev.status === "loaded"
-          ? { ...prev, data: updated, draft: { ...updated }, saving: false, saved: true }
+          ? {
+              ...prev,
+              data: updated,
+              draft: { ...updated },
+              saving: false,
+              saved: true,
+            }
           : prev
       )
     } catch (err: unknown) {
-      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+      setState({
+        status: "error",
+        message: String(err instanceof Error ? err.message : err),
+      })
     }
   }
 
   async function handleGc() {
-    setState((prev) => (prev.status === "loaded" ? { ...prev, gcBusy: true } : prev))
+    setState((prev) =>
+      prev.status === "loaded" ? { ...prev, gcBusy: true } : prev
+    )
     try {
       const config = toConfig(connectionForm)
       await triggerServerGc(config)
     } finally {
-      setState((prev) => (prev.status === "loaded" ? { ...prev, gcBusy: false } : prev))
+      setState((prev) =>
+        prev.status === "loaded" ? { ...prev, gcBusy: false } : prev
+      )
     }
   }
 
   async function handleFetchCache() {
-    setState((prev) => (prev.status === "loaded" ? { ...prev, cacheBusy: true, cacheText: null } : prev))
+    setState((prev) =>
+      prev.status === "loaded"
+        ? { ...prev, cacheBusy: true, cacheText: null }
+        : prev
+    )
     try {
       const config = toConfig(connectionForm)
       const text = await getServerCache(config)
-      setState((prev) => (prev.status === "loaded" ? { ...prev, cacheBusy: false, cacheText: String(text) } : prev))
+      setState((prev) =>
+        prev.status === "loaded"
+          ? { ...prev, cacheBusy: false, cacheText: String(text) }
+          : prev
+      )
     } catch (err: unknown) {
       setState((prev) =>
         prev.status === "loaded"
-          ? { ...prev, cacheBusy: false, cacheText: `Error: ${err instanceof Error ? err.message : String(err)}` }
+          ? {
+              ...prev,
+              cacheBusy: false,
+              cacheText: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            }
           : prev
       )
     }
   }
 
   async function handleReboot() {
-    if (!confirm("Reboot the Traccar server process? It will be briefly unavailable.")) return
-    setState((prev) => (prev.status === "loaded" ? { ...prev, rebootBusy: true } : prev))
+    if (
+      !confirm(
+        "Reboot the Traccar server process? It will be briefly unavailable."
+      )
+    )
+      return
+    setState((prev) =>
+      prev.status === "loaded" ? { ...prev, rebootBusy: true } : prev
+    )
     try {
       const config = toConfig(connectionForm)
       await rebootServer(config)
     } finally {
-      setState((prev) => (prev.status === "loaded" ? { ...prev, rebootBusy: false } : prev))
+      setState((prev) =>
+        prev.status === "loaded" ? { ...prev, rebootBusy: false } : prev
+      )
     }
   }
 
@@ -546,7 +597,10 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
             <CardTitle className="text-sm">General</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FieldRow label="Announcement" description="Message shown to all users in the web UI">
+            <FieldRow
+              label="Announcement"
+              description="Message shown to all users in the web UI"
+            >
               <Input
                 value={draft.announcement ?? ""}
                 onChange={(e) => setDraft({ announcement: e.target.value })}
@@ -554,7 +608,10 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
-            <FieldRow label="Coordinate Format" description="Default format for displaying coordinates">
+            <FieldRow
+              label="Coordinate Format"
+              description="Default format for displaying coordinates"
+            >
               <Input
                 value={draft.coordinateFormat ?? ""}
                 onChange={(e) => setDraft({ coordinateFormat: e.target.value })}
@@ -571,22 +628,40 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
             <CardTitle className="text-sm">Map</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FieldRow label="Default Latitude" description="Initial map center latitude">
+            <FieldRow
+              label="Default Latitude"
+              description="Initial map center latitude"
+            >
               <Input
                 value={draft.latitude ?? ""}
                 type="number"
                 step="any"
-                onChange={(e) => setDraft({ latitude: e.target.value ? Number(e.target.value) : undefined })}
+                onChange={(e) =>
+                  setDraft({
+                    latitude: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
                 placeholder="0"
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
-            <FieldRow label="Default Longitude" description="Initial map center longitude">
+            <FieldRow
+              label="Default Longitude"
+              description="Initial map center longitude"
+            >
               <Input
                 value={draft.longitude ?? ""}
                 type="number"
                 step="any"
-                onChange={(e) => setDraft({ longitude: e.target.value ? Number(e.target.value) : undefined })}
+                onChange={(e) =>
+                  setDraft({
+                    longitude: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
                 placeholder="0"
                 disabled={saving || !!isReadonly}
               />
@@ -597,12 +672,19 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                 type="number"
                 min={1}
                 max={22}
-                onChange={(e) => setDraft({ zoom: e.target.value ? Number(e.target.value) : undefined })}
+                onChange={(e) =>
+                  setDraft({
+                    zoom: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
                 placeholder="12"
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
-            <FieldRow label="Map Layer" description="Default map tile provider identifier">
+            <FieldRow
+              label="Map Layer"
+              description="Default map tile provider identifier"
+            >
               <Input
                 value={draft.map ?? ""}
                 onChange={(e) => setDraft({ map: e.target.value })}
@@ -610,7 +692,10 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
-            <FieldRow label="Custom Map URL" description="Custom tile server URL template">
+            <FieldRow
+              label="Custom Map URL"
+              description="Custom tile server URL template"
+            >
               <Input
                 value={draft.mapUrl ?? ""}
                 onChange={(e) => setDraft({ mapUrl: e.target.value })}
@@ -618,7 +703,10 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
-            <FieldRow label="Bing Maps Key" description="API key used when Bing is selected as the map provider">
+            <FieldRow
+              label="Bing Maps Key"
+              description="API key used when Bing is selected as the map provider"
+            >
               <Input
                 value={draft.bingKey ?? ""}
                 onChange={(e) => setDraft({ bingKey: e.target.value })}
@@ -626,7 +714,10 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                 disabled={saving || !!isReadonly}
               />
             </FieldRow>
-            <FieldRow label="POI Layer" description="External point-of-interest layer configuration">
+            <FieldRow
+              label="POI Layer"
+              description="External point-of-interest layer configuration"
+            >
               <Input
                 value={draft.poiLayer ?? ""}
                 onChange={(e) => setDraft({ poiLayer: e.target.value })}
@@ -688,7 +779,13 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
             {data.openIdEnabled !== undefined && (
               <p className="pl-7 text-[11px] text-muted-foreground">
                 OpenID is{" "}
-                <span className={data.openIdEnabled ? "text-emerald-600 dark:text-emerald-400" : ""}>
+                <span
+                  className={
+                    data.openIdEnabled
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : ""
+                  }
+                >
                   {data.openIdEnabled ? "enabled" : "not configured"}
                 </span>{" "}
                 on this server.
@@ -699,7 +796,8 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
 
         {isReadonly ? (
           <p className="text-xs text-muted-foreground">
-            Server is in read-only mode. Only administrators can change settings.
+            Server is in read-only mode. Only administrators can change
+            settings.
           </p>
         ) : (
           <div className="flex items-center gap-3">
@@ -727,7 +825,9 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
           {/* Garbage collection */}
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-medium text-foreground">Garbage Collection</p>
+              <p className="text-xs font-medium text-foreground">
+                Garbage Collection
+              </p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 Trigger JVM garbage collection to free unused memory.
               </p>
@@ -748,7 +848,9 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
           <div className="space-y-2">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-foreground">Cache Diagnostics</p>
+                <p className="text-xs font-medium text-foreground">
+                  Cache Diagnostics
+                </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   Fetch internal cache statistics from the server.
                 </p>
@@ -765,18 +867,23 @@ function ServerTab({ connectionForm }: { connectionForm: ConnectionForm }) {
               </Button>
             </div>
             {cacheText && (
-              <pre className="max-h-48 overflow-auto rounded-md border border-border/50 bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
-                {cacheText}
-              </pre>
+              <ScrollArea className="h-48 rounded-md border border-border/50 bg-muted/40">
+                <pre className="p-3 text-[11px] leading-relaxed text-muted-foreground">
+                  {cacheText}
+                </pre>
+              </ScrollArea>
             )}
           </div>
 
           {/* Reboot */}
           <div className="flex items-start justify-between gap-4 border-t border-border/40 pt-4">
             <div>
-              <p className="text-xs font-medium text-destructive">Reboot Server</p>
+              <p className="text-xs font-medium text-destructive">
+                Reboot Server
+              </p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Restart the Traccar server process. The server will be briefly unavailable.
+                Restart the Traccar server process. The server will be briefly
+                unavailable.
               </p>
             </div>
             <Button
@@ -845,7 +952,10 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
         })
       })
       .catch((err: unknown) => {
-        setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+        setState({
+          status: "error",
+          message: String(err instanceof Error ? err.message : err),
+        })
       })
   }
 
@@ -895,9 +1005,11 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
       {devices.length === 0 ? (
         <Card className="border-border/50">
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Truck className="size-12 text-muted-foreground/30 mb-4" />
-            <p className="text-sm font-medium text-muted-foreground mb-1">No devices found</p>
-            <p className="text-xs text-muted-foreground mb-4">
+            <Truck className="mb-4 size-12 text-muted-foreground/30" />
+            <p className="mb-1 text-sm font-medium text-muted-foreground">
+              No devices found
+            </p>
+            <p className="mb-4 text-xs text-muted-foreground">
               Add your first device to start tracking
             </p>
             <Button onClick={() => setIsAddDialogOpen(true)}>
@@ -916,12 +1028,12 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                   <button
                     key={device.id}
                     onClick={() => setEditingDevice(device)}
-                    className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors text-left"
+                    className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-muted/30"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <DeviceIcon className="size-5 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {device.name}
                         </p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -929,35 +1041,38 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
                           {device.category && (
                             <>
                               <span>•</span>
-                              <span className="capitalize">{device.category}</span>
+                              <span className="capitalize">
+                                {device.category}
+                              </span>
                             </>
                           )}
                         </div>
                       </div>
                     </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {device.status && (
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded ${
-                          device.status === "online"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : device.status === "offline"
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                        }`}
-                      >
-                        {device.status}
-                      </span>
-                    )}
-                    {device.disabled && (
-                      <span className="text-xs font-medium px-2 py-1 rounded bg-destructive/10 text-destructive">
-                        Disabled
-                      </span>
-                    )}
-                    <ChevronRight className="size-4 text-muted-foreground" />
-                  </div>
-                </button>
-              )})}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {device.status && (
+                        <span
+                          className={`rounded px-2 py-1 text-xs font-medium ${
+                            device.status === "online"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : device.status === "offline"
+                                ? "bg-muted text-muted-foreground"
+                                : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                          }`}
+                        >
+                          {device.status}
+                        </span>
+                      )}
+                      {device.disabled && (
+                        <span className="rounded bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
+                          Disabled
+                        </span>
+                      )}
+                      <ChevronRight className="size-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -967,7 +1082,7 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
       {devices.length > 0 && (
         <button
           onClick={() => setIsAddDialogOpen(true)}
-          className="fixed bottom-8 right-8 size-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center z-40"
+          className="fixed right-8 bottom-8 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
           aria-label="Add device"
         >
           <Plus className="size-6" />
@@ -976,38 +1091,49 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
 
       {/* Add Device Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex max-w-2xl flex-col gap-0">
           <DialogHeader>
             <DialogTitle>Add New Device</DialogTitle>
             <DialogDescription>
               Enter device information to register it with your tracking server.
             </DialogDescription>
           </DialogHeader>
-          <DeviceForm
-            connectionForm={connectionForm}
-            onSuccess={handleDeviceAdded}
-            onCancel={() => setIsAddDialogOpen(false)}
-          />
+          <ScrollArea className="max-h-[calc(90vh-8rem)]">
+            <div className="pt-4 pr-4">
+              <DeviceForm
+                connectionForm={connectionForm}
+                onSuccess={handleDeviceAdded}
+                onCancel={() => setIsAddDialogOpen(false)}
+              />
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
       {/* Edit Device Dialog */}
-      <Dialog open={!!editingDevice} onOpenChange={(open) => !open && setEditingDevice(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog
+        open={!!editingDevice}
+        onOpenChange={(open) => !open && setEditingDevice(null)}
+      >
+        <DialogContent className="flex max-w-2xl flex-col gap-0">
           <DialogHeader>
             <DialogTitle>Edit Device</DialogTitle>
             <DialogDescription>
               Update device information and settings.
             </DialogDescription>
           </DialogHeader>
-          {editingDevice && (
-            <DeviceForm
-              connectionForm={connectionForm}
-              device={editingDevice}
-              onSuccess={handleDeviceUpdated}
-              onCancel={() => setEditingDevice(null)}
-            />
-          )}
+          <ScrollArea className="max-h-[calc(90vh-8rem)]">
+            <div className="pt-4 pr-4">
+              {editingDevice && (
+                <DeviceForm
+                  connectionForm={connectionForm}
+                  device={editingDevice}
+                  onSuccess={handleDeviceUpdated}
+                  onCancel={() => setEditingDevice(null)}
+                />
+              )}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
@@ -1058,7 +1184,10 @@ function DeviceForm({
         })
       })
       .catch((err: unknown) => {
-        setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+        setState({
+          status: "error",
+          message: String(err instanceof Error ? err.message : err),
+        })
       })
   }, [connectionForm, device])
 
@@ -1096,7 +1225,9 @@ function DeviceForm({
       return
     }
 
-    setState((prev) => (prev.status === "loaded" ? { ...prev, saving: true } : prev))
+    setState((prev) =>
+      prev.status === "loaded" ? { ...prev, saving: true } : prev
+    )
     try {
       const config = toConfig(connectionForm)
 
@@ -1112,27 +1243,39 @@ function DeviceForm({
           ...(form.model && { model: form.model }),
           ...(form.contact && { contact: form.contact }),
           ...(form.disabled !== undefined && { disabled: form.disabled }),
-          ...(form.attributes && Object.keys(form.attributes).length > 0 && { attributes: form.attributes }),
+          ...(form.attributes &&
+            Object.keys(form.attributes).length > 0 && {
+              attributes: form.attributes,
+            }),
         }
         await createDevice(config, deviceData)
       }
       onSuccess()
     } catch (err: unknown) {
-      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+      setState({
+        status: "error",
+        message: String(err instanceof Error ? err.message : err),
+      })
     }
   }
 
   async function handleDelete() {
     if (!isEditing || state.status !== "loaded") return
-    if (!confirm(`Delete device "${form.name}"? This action cannot be undone.`)) return
+    if (!confirm(`Delete device "${form.name}"? This action cannot be undone.`))
+      return
 
-    setState((prev) => (prev.status === "loaded" ? { ...prev, deleting: true } : prev))
+    setState((prev) =>
+      prev.status === "loaded" ? { ...prev, deleting: true } : prev
+    )
     try {
       const config = toConfig(connectionForm)
       await deleteDevice(config, form.id)
       onSuccess()
     } catch (err: unknown) {
-      setState({ status: "error", message: String(err instanceof Error ? err.message : err) })
+      setState({
+        status: "error",
+        message: String(err instanceof Error ? err.message : err),
+      })
     }
   }
 
@@ -1140,7 +1283,10 @@ function DeviceForm({
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Required fields */}
       <div className="space-y-4">
-        <FieldRow label="Name" description="Device name or identifier (required)">
+        <FieldRow
+          label="Name"
+          description="Device name or identifier (required)"
+        >
           <Input
             value={form.name ?? ""}
             onChange={(e) => setForm({ name: e.target.value })}
@@ -1150,7 +1296,10 @@ function DeviceForm({
             autoFocus
           />
         </FieldRow>
-        <FieldRow label="Unique ID" description="Device hardware identifier (IMEI, serial number, etc.) (required)">
+        <FieldRow
+          label="Unique ID"
+          description="Device hardware identifier (IMEI, serial number, etc.) (required)"
+        >
           <Input
             value={form.uniqueId ?? ""}
             onChange={(e) => setForm({ uniqueId: e.target.value })}
@@ -1163,14 +1312,18 @@ function DeviceForm({
 
       {/* Optional fields */}
       <div className="space-y-4 border-t border-border/30 pt-4">
-        <p className="text-xs font-medium text-muted-foreground">Optional Information</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          Optional Information
+        </p>
 
         <FieldRow label="Category" description="Device type for map icon">
           <Select
             value={form.category ?? "none"}
-            onValueChange={(value) => setForm({
-              category: value === "none" ? undefined : value
-            })}
+            onValueChange={(value) =>
+              setForm({
+                category: value === "none" ? undefined : value,
+              })
+            }
             disabled={saving || deleting}
           >
             <SelectTrigger className="w-full">
@@ -1191,9 +1344,11 @@ function DeviceForm({
           <FieldRow label="Group" description="Associate device with a group">
             <Select
               value={form.groupId?.toString() ?? "none"}
-              onValueChange={(value) => setForm({
-                groupId: value === "none" ? undefined : Number(value)
-              })}
+              onValueChange={(value) =>
+                setForm({
+                  groupId: value === "none" ? undefined : Number(value),
+                })
+              }
               disabled={saving || deleting}
             >
               <SelectTrigger className="w-full">
@@ -1211,7 +1366,10 @@ function DeviceForm({
           </FieldRow>
         )}
 
-        <FieldRow label="Phone Number" description="Contact phone number for SMS commands">
+        <FieldRow
+          label="Phone Number"
+          description="Contact phone number for SMS commands"
+        >
           <Input
             value={form.phone ?? ""}
             onChange={(e) => setForm({ phone: e.target.value })}
@@ -1248,7 +1406,7 @@ function DeviceForm({
         />
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/30">
+      <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-2">
         {isEditing ? (
           <Button
             type="button"
@@ -1262,12 +1420,26 @@ function DeviceForm({
           <div />
         )}
         <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={saving || deleting}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            disabled={saving || deleting}
+          >
             Cancel
           </Button>
-          <Button type="submit" disabled={saving || deleting || !form.name || !form.uniqueId}>
+          <Button
+            type="submit"
+            disabled={saving || deleting || !form.name || !form.uniqueId}
+          >
             <Plus className="size-4" />
-            {saving ? (isEditing ? "Saving…" : "Adding…") : (isEditing ? "Save Changes" : "Add Device")}
+            {saving
+              ? isEditing
+                ? "Saving…"
+                : "Adding…"
+              : isEditing
+                ? "Save Changes"
+                : "Add Device"}
           </Button>
         </div>
       </div>
@@ -1291,7 +1463,9 @@ function FieldRow({
       <div>
         <p className="text-xs font-medium text-foreground">{label}</p>
         {description && (
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {description}
+          </p>
         )}
       </div>
       <div className="min-w-0">{children}</div>
@@ -1324,7 +1498,9 @@ function ToggleRow({
       <div>
         <p className="text-xs font-medium text-foreground">{label}</p>
         {description && (
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {description}
+          </p>
         )}
       </div>
     </label>

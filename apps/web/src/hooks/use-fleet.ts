@@ -399,7 +399,10 @@ export function useFleet() {
   // Best-effort — image display degrades gracefully if this fails.
   async function createCookieSession(form: ConnectionForm) {
     if (form.authMode !== "session" || !form.email || !form.password) return
-    const body = new URLSearchParams({ email: form.email, password: form.password })
+    const body = new URLSearchParams({
+      email: form.email,
+      password: form.password,
+    })
     if (form.code) body.set("code", form.code)
     await fetch("/api/session", {
       method: "POST",

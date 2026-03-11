@@ -18,7 +18,9 @@ import {
   type IconProps,
 } from "@/components/icons"
 
-export function getDeviceIcon(category?: string | null): React.ComponentType<IconProps> {
+export function getDeviceIcon(
+  category?: string | null
+): React.ComponentType<IconProps> {
   switch (category) {
     case "car":
       return Car

@@ -46,6 +46,13 @@ export const MapPinned = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const MapPin = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+    <circle cx="12" cy="10" r="3" />
+  </IconBase>
+)
+
 export const Moon = ({ className }: IconProps) => (
   <IconBase className={className}>
     <path d="M20 14.5A7.5 7.5 0 1 1 9.5 4 6 6 0 0 0 20 14.5Z" />
@@ -147,6 +154,18 @@ export const ChevronRight = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const ChevronDown = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="m6 9 6 6 6-6" />
+  </IconBase>
+)
+
+export const ChevronUp = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="m18 15-6-6-6 6" />
+  </IconBase>
+)
+
 export const X = ({ className }: IconProps) => (
   <IconBase className={className}>
     <path d="M18 6 6 18M6 6l12 12" />
@@ -184,8 +203,22 @@ export const Server = ({ className }: IconProps) => (
   <IconBase className={className}>
     <rect x="2" y="2" width="20" height="8" rx="2" />
     <rect x="2" y="14" width="20" height="8" rx="2" />
-    <line x1="6" y1="6" x2="6.01" y2="6" strokeWidth="2" strokeLinecap="round" />
-    <line x1="6" y1="18" x2="6.01" y2="18" strokeWidth="2" strokeLinecap="round" />
+    <line
+      x1="6"
+      y1="6"
+      x2="6.01"
+      y2="6"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <line
+      x1="6"
+      y1="18"
+      x2="6.01"
+      y2="18"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </IconBase>
 )
 
@@ -200,6 +233,28 @@ export const LogOut = ({ className }: IconProps) => (
 export const Plus = ({ className }: IconProps) => (
   <IconBase className={className}>
     <path d="M12 5v14M5 12h14" />
+  </IconBase>
+)
+
+export const Terminal = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
+  </IconBase>
+)
+
+export const Edit = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+    <path d="m15 5 4 4" />
+  </IconBase>
+)
+
+export const MoreVertical = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="12" cy="5" r="1" />
+    <circle cx="12" cy="19" r="1" />
   </IconBase>
 )
 
