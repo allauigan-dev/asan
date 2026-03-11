@@ -36,10 +36,12 @@ import {
   Plus,
   Server,
   ShieldCheck,
+  Terminal,
   Truck,
   Users,
   Wrench,
 } from "@/components/icons"
+import { CommandPanel } from "@/components/settings/command-panel"
 import { DriverPanel } from "@/components/settings/driver-panel"
 import { GeofencePanel } from "@/components/settings/geofence-panel"
 import { GroupPanel } from "@/components/settings/group-panel"
@@ -70,11 +72,11 @@ import type { AuthMode } from "@/lib/traccar"
 import type { ConnectionState } from "@/hooks/use-fleet"
 
 type SettingsTab =
-  | "connection"
   | "server"
   | "devices"
   | "geofences"
   | "drivers"
+  | "commands"
   | "maintenance"
   | "notifications"
   | "users"
@@ -101,7 +103,7 @@ export function SettingsPage({
   onDeviceUpdate,
 }: SettingsPageProps) {
   const [form, setForm] = useState<ConnectionForm>(() => readStoredConfig())
-  const [activeTab, setActiveTab] = useState<SettingsTab>("connection")
+  const [activeTab, setActiveTab] = useState<SettingsTab>("server")
 
   const isConnecting = connectionState === "connecting"
   const isTotpRequired = connectionState === "totp_required"
@@ -160,12 +162,6 @@ export function SettingsPage({
         </div>
         <nav className="flex flex-col gap-0.5 p-2">
           <NavItem
-            icon={<ShieldCheck className="size-4" />}
-            label="Connection"
-            active={activeTab === "connection"}
-            onClick={() => setActiveTab("connection")}
-          />
-          <NavItem
             icon={<Server className="size-4" />}
             label="Server"
             active={activeTab === "server"}
@@ -198,6 +194,13 @@ export function SettingsPage({
             label="Drivers"
             active={activeTab === "drivers"}
             onClick={() => setActiveTab("drivers")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<Terminal className="size-4" />}
+            label="Commands"
+            active={activeTab === "commands"}
+            onClick={() => setActiveTab("commands")}
             disabled={!isConnected}
           />
           <NavItem
@@ -234,17 +237,6 @@ export function SettingsPage({
       {/* Content area */}
       <ScrollArea className="flex-1 bg-muted/20">
         <div className="p-6">
-          {activeTab === "connection" && (
-            <ConnectionTab
-              form={form}
-              setForm={setForm}
-              isConnecting={isConnecting}
-              isTotpRequired={isTotpRequired}
-              connectionError={connectionError}
-              connectionState={connectionState}
-              onSubmit={handleSubmit}
-            />
-          )}
           {activeTab === "server" && isConnected && (
             <ServerTab connectionForm={form} />
           )}
@@ -253,6 +245,7 @@ export function SettingsPage({
           )}
           {activeTab === "geofences" && isConnected && <GeofencePanel />}
           {activeTab === "drivers" && isConnected && <DriverPanel />}
+          {activeTab === "commands" && isConnected && <CommandPanel />}
           {activeTab === "maintenance" && isConnected && <MaintenancePanel />}
           {activeTab === "notifications" && isConnected && (
             <NotificationPanel />
@@ -295,62 +288,6 @@ function NavItem({
       {icon}
       {label}
     </button>
-  )
-}
-
-// ── Connection tab ─────────────────────────────────────────────────────────────
-
-function ConnectionTab({
-  form,
-  setForm,
-  isConnecting,
-  isTotpRequired,
-  connectionError,
-  connectionState,
-  onSubmit,
-}: {
-  form: ConnectionForm
-  setForm: React.Dispatch<React.SetStateAction<ConnectionForm>>
-  isConnecting: boolean
-  isTotpRequired: boolean
-  connectionError: string
-  connectionState: ConnectionState
-  onSubmit: (e: FormEvent<HTMLFormElement>) => void
-}) {
-  const isConnected = connectionState === "connected"
-
-  return (
-    <div className="mx-auto w-full max-w-lg space-y-6">
-      <div>
-        <h2 className="font-display text-lg font-bold">Connection</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {isTotpRequired
-            ? "Enter the verification code from your authenticator app."
-            : "Configure your Traccar server URL and credentials."}
-        </p>
-      </div>
-
-      {isConnected && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
-          <ShieldCheck className="size-3.5 shrink-0" />
-          Connected to {form.serverUrl}
-        </div>
-      )}
-
-      <Card className="border-border/50">
-        <CardContent className="pt-5">
-          <ConnectionForm
-            form={form}
-            setForm={setForm}
-            isConnecting={isConnecting}
-            isTotpRequired={isTotpRequired}
-            connectionError={connectionError}
-            onSubmit={onSubmit}
-            submitLabel={isConnected ? "Reconnect" : undefined}
-          />
-        </CardContent>
-      </Card>
-    </div>
   )
 }
 
