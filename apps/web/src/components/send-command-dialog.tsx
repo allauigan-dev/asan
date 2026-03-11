@@ -100,8 +100,7 @@ export function SendCommandDialog({
     } catch (err) {
       setResult({
         status: "error",
-        message:
-          err instanceof Error ? err.message : "Failed to send command",
+        message: err instanceof Error ? err.message : "Failed to send command",
       })
     } finally {
       setSending(false)
@@ -113,9 +112,7 @@ export function SendCommandDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Send Command</DialogTitle>
-          <DialogDescription>
-            Send a command to {deviceName}
-          </DialogDescription>
+          <DialogDescription>Send a command to {deviceName}</DialogDescription>
         </DialogHeader>
 
         {loading ? (

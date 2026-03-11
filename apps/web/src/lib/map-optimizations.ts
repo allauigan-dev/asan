@@ -151,10 +151,7 @@ export class PositionUpdateThrottler {
     if (!this.timer) {
       const now = Date.now()
       const timeSinceLastFlush = now - this.lastFlushTime
-      const delay = Math.max(
-        0,
-        this.currentInterval - timeSinceLastFlush
-      )
+      const delay = Math.max(0, this.currentInterval - timeSinceLastFlush)
 
       this.timer = setTimeout(() => {
         this.flush()
@@ -301,8 +298,5 @@ export function mergePositionUpdates(
   const updateMap = new Map(updates.map((p) => [p.deviceId, p]))
 
   // Replace existing positions with updates, keep non-updated ones
-  return [
-    ...updates,
-    ...existing.filter((p) => !updateMap.has(p.deviceId)),
-  ]
+  return [...updates, ...existing.filter((p) => !updateMap.has(p.deviceId))]
 }

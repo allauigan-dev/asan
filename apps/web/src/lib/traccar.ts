@@ -39,11 +39,7 @@ function getCached<T>(
   return entry.data
 }
 
-function setCached<T>(
-  config: TraccarConfig,
-  endpoint: string,
-  data: T
-): void {
+function setCached<T>(config: TraccarConfig, endpoint: string, data: T): void {
   const key = getCacheKey(config, endpoint)
   cache.set(key, { data, timestamp: Date.now() })
 }
@@ -547,11 +543,7 @@ async function getDevices(config: TraccarConfig) {
   return devices
 }
 
-function geocode(
-  config: TraccarConfig,
-  latitude: number,
-  longitude: number
-) {
+function geocode(config: TraccarConfig, latitude: number, longitude: number) {
   const params = new URLSearchParams({
     latitude: latitude.toString(),
     longitude: longitude.toString(),
@@ -598,7 +590,9 @@ async function uploadDeviceImage(
   id: number,
   imageFile: File
 ): Promise<string> {
-  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/devices/${id}/image`)
+  const url = new URL(
+    `${normalizeServerUrl(config.serverUrl)}/devices/${id}/image`
+  )
 
   const response = await fetch(url, {
     method: "POST",
@@ -1044,10 +1038,7 @@ function getUsers(config: TraccarConfig) {
   return request<TraccarFullUser[]>(config, "/users")
 }
 
-function createUser(
-  config: TraccarConfig,
-  user: Omit<TraccarFullUser, "id">
-) {
+function createUser(config: TraccarConfig, user: Omit<TraccarFullUser, "id">) {
   return request<TraccarFullUser>(config, "/users", {
     method: "POST",
     body: JSON.stringify(user),
@@ -1055,11 +1046,7 @@ function createUser(
   })
 }
 
-function updateUser(
-  config: TraccarConfig,
-  id: number,
-  user: TraccarFullUser
-) {
+function updateUser(config: TraccarConfig, id: number, user: TraccarFullUser) {
   return request<TraccarFullUser>(config, `/users/${id}`, {
     method: "PUT",
     body: JSON.stringify(user),

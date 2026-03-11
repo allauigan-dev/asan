@@ -156,13 +156,9 @@ function UserFormDialog({
       setPassword("")
       setAdministrator(item?.administrator ?? false)
       setDisabled(item?.disabled ?? false)
-      setDeviceLimit(
-        item?.deviceLimit != null ? String(item.deviceLimit) : ""
-      )
+      setDeviceLimit(item?.deviceLimit != null ? String(item.deviceLimit) : "")
       setExpirationTime(
-        item?.expirationTime
-          ? item.expirationTime.substring(0, 16)
-          : ""
+        item?.expirationTime ? item.expirationTime.substring(0, 16) : ""
       )
     }
   }, [open, item])
@@ -221,7 +217,9 @@ function UserFormDialog({
             onChange={(e) => setEmail(e.target.value)}
           />
           <Input
-            placeholder={item ? "New password (leave blank to keep)" : "Password"}
+            placeholder={
+              item ? "New password (leave blank to keep)" : "Password"
+            }
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

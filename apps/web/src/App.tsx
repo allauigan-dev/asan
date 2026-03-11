@@ -55,9 +55,7 @@ import {
 import { getStoredMapStyle, MAP_STYLES, saveMapStyle } from "@/lib/map-styles"
 
 function parseGeofenceCenter(area: string): [number, number] | null {
-  const circleMatch = area.match(
-    /CIRCLE\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*,/i
-  )
+  const circleMatch = area.match(/CIRCLE\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*,/i)
   if (circleMatch) {
     return [Number(circleMatch[2]), Number(circleMatch[1])]
   }
@@ -638,9 +636,7 @@ export function App() {
                       <StopCircle className="size-3" />
                     </div>
                     <MarkerLabel position="bottom">
-                      {durationLabel(
-                        stop.duration ? stop.duration * 1000 : 0
-                      )}
+                      {durationLabel(stop.duration ? stop.duration * 1000 : 0)}
                     </MarkerLabel>
                   </MarkerContent>
                   <MarkerPopup className="w-52 p-0">

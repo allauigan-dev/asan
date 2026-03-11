@@ -188,13 +188,7 @@ export function LiveTelemetryPanel({
                 ).toISOString()
                 const to = now.toISOString()
                 window.open(
-                  getExportUrl(
-                    config,
-                    "csv",
-                    selectedDevice.id,
-                    from,
-                    to
-                  ),
+                  getExportUrl(config, "csv", selectedDevice.id, from, to),
                   "_blank"
                 )
               }}
@@ -266,13 +260,13 @@ export function LiveTelemetryPanel({
                 )}
               </div>
               {showAddress || selectedPosition.address ? (
-                <InfoRow 
-                  label="Address" 
+                <InfoRow
+                  label="Address"
                   value={
-                    selectedPosition.address || 
-                    geocodedAddress || 
+                    selectedPosition.address ||
+                    geocodedAddress ||
                     (isLoadingAddress ? "Loading..." : "Address not available")
-                  } 
+                  }
                 />
               ) : (
                 <>
@@ -766,7 +760,9 @@ function DeviceEditForm({
       delete nextAttributes.deviceImage
     }
     setForm({
-      attributes: Object.keys(nextAttributes).length ? nextAttributes : undefined,
+      attributes: Object.keys(nextAttributes).length
+        ? nextAttributes
+        : undefined,
     })
   }
 
@@ -951,10 +947,12 @@ function DeviceEditForm({
                 <Input
                   type="file"
                   accept="image/*"
-                  onChange={(e) =>
-                    setImageFile(e.target.files?.[0] ?? null)
+                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  disabled={
+                    saving ||
+                    deleting ||
+                    imageUploadState.status === "uploading"
                   }
-                  disabled={saving || deleting || imageUploadState.status === "uploading"}
                   className="min-w-[220px]"
                 />
                 <Button
@@ -1061,9 +1059,7 @@ function DeviceEditForm({
               totalDistance: accumulatorDistance
                 ? Number(accumulatorDistance) * 1000
                 : undefined,
-              hours: accumulatorHours
-                ? Number(accumulatorHours)
-                : undefined,
+              hours: accumulatorHours ? Number(accumulatorHours) : undefined,
             })
           }}
         >

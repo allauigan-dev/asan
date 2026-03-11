@@ -26,13 +26,27 @@ import {
 } from "@workspace/ui/components/select"
 
 import {
+  BarChart,
+  Bell,
   ChevronLeft,
   ChevronRight,
+  Fence,
+  FolderOpen,
+  Person,
   Plus,
   Server,
   ShieldCheck,
   Truck,
+  Users,
+  Wrench,
 } from "@/components/icons"
+import { DriverPanel } from "@/components/settings/driver-panel"
+import { GeofencePanel } from "@/components/settings/geofence-panel"
+import { GroupPanel } from "@/components/settings/group-panel"
+import { MaintenancePanel } from "@/components/settings/maintenance-panel"
+import { NotificationPanel } from "@/components/settings/notification-panel"
+import { StatisticsPanel } from "@/components/settings/statistics-panel"
+import { UserPanel } from "@/components/settings/user-panel"
 import { AuthImage } from "@/components/auth-image"
 import { readStoredConfig, toConfig, type ConnectionForm } from "@/lib/config"
 import { getDeviceIcon } from "@/lib/utils"
@@ -55,7 +69,17 @@ import {
 import type { AuthMode } from "@/lib/traccar"
 import type { ConnectionState } from "@/hooks/use-fleet"
 
-type SettingsTab = "connection" | "server" | "devices"
+type SettingsTab =
+  | "connection"
+  | "server"
+  | "devices"
+  | "geofences"
+  | "drivers"
+  | "maintenance"
+  | "notifications"
+  | "users"
+  | "groups"
+  | "statistics"
 
 type SettingsPageProps = {
   connectionState: ConnectionState
@@ -155,6 +179,55 @@ export function SettingsPage({
             onClick={() => setActiveTab("devices")}
             disabled={!isConnected}
           />
+          <NavItem
+            icon={<FolderOpen className="size-4" />}
+            label="Groups"
+            active={activeTab === "groups"}
+            onClick={() => setActiveTab("groups")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<Fence className="size-4" />}
+            label="Geofences"
+            active={activeTab === "geofences"}
+            onClick={() => setActiveTab("geofences")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<Person className="size-4" />}
+            label="Drivers"
+            active={activeTab === "drivers"}
+            onClick={() => setActiveTab("drivers")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<Wrench className="size-4" />}
+            label="Maintenance"
+            active={activeTab === "maintenance"}
+            onClick={() => setActiveTab("maintenance")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<Bell className="size-4" />}
+            label="Notifications"
+            active={activeTab === "notifications"}
+            onClick={() => setActiveTab("notifications")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<Users className="size-4" />}
+            label="Users"
+            active={activeTab === "users"}
+            onClick={() => setActiveTab("users")}
+            disabled={!isConnected}
+          />
+          <NavItem
+            icon={<BarChart className="size-4" />}
+            label="Statistics"
+            active={activeTab === "statistics"}
+            onClick={() => setActiveTab("statistics")}
+            disabled={!isConnected}
+          />
         </nav>
       </aside>
 
@@ -178,6 +251,15 @@ export function SettingsPage({
           {activeTab === "devices" && isConnected && (
             <DevicesTab connectionForm={form} onDeviceUpdate={onDeviceUpdate} />
           )}
+          {activeTab === "geofences" && isConnected && <GeofencePanel />}
+          {activeTab === "drivers" && isConnected && <DriverPanel />}
+          {activeTab === "maintenance" && isConnected && <MaintenancePanel />}
+          {activeTab === "notifications" && isConnected && (
+            <NotificationPanel />
+          )}
+          {activeTab === "users" && isConnected && <UserPanel />}
+          {activeTab === "groups" && isConnected && <GroupPanel />}
+          {activeTab === "statistics" && isConnected && <StatisticsPanel />}
         </div>
       </ScrollArea>
     </div>
@@ -1323,7 +1405,9 @@ function DeviceForm({
       delete nextAttributes.deviceImage
     }
     setForm({
-      attributes: Object.keys(nextAttributes).length ? nextAttributes : undefined,
+      attributes: Object.keys(nextAttributes).length
+        ? nextAttributes
+        : undefined,
     })
   }
 
@@ -1489,10 +1573,12 @@ function DeviceForm({
                   <Input
                     type="file"
                     accept="image/*"
-                    onChange={(e) =>
-                      setImageFile(e.target.files?.[0] ?? null)
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                    disabled={
+                      saving ||
+                      deleting ||
+                      imageUploadState.status === "uploading"
                     }
-                    disabled={saving || deleting || imageUploadState.status === "uploading"}
                     className="min-w-[220px]"
                   />
                   <Button

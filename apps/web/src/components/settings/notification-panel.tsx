@@ -96,8 +96,7 @@ export function NotificationPanel() {
                     <div>
                       <p className="font-medium">{n.type}</p>
                       <p className="text-xs text-muted-foreground">
-                        {n.notificators || "web"}{" "}
-                        {n.always ? "• always" : ""}
+                        {n.notificators || "web"} {n.always ? "• always" : ""}
                       </p>
                     </div>
                   </div>
@@ -110,7 +109,7 @@ export function NotificationPanel() {
                       onClick={(e) => {
                         e.stopPropagation()
                         const config = toConfig(readStoredConfig())
-                        testNotification(config, n.id)
+                        testNotification(config)
                       }}
                     >
                       <Send className="size-4" />
@@ -169,7 +168,9 @@ function NotificationFormDialog({
       setNotificators(item?.notificators ?? "")
       setAlways(item?.always ?? false)
       const config = toConfig(readStoredConfig())
-      getNotificationTypes(config).then(setTypes).catch(() => {})
+      getNotificationTypes(config)
+        .then(setTypes)
+        .catch(() => {})
     }
   }, [open, item])
 

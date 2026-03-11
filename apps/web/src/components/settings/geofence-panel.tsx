@@ -201,8 +201,8 @@ function GeofenceFormDialog({
               onChange={(e) => setArea(e.target.value)}
             />
             <p className="text-[11px] text-muted-foreground">
-              WKT format: CIRCLE (lat lon, radiusMeters) or POLYGON ((lon1
-              lat1, lon2 lat2, ...))
+              WKT format: CIRCLE (lat lon, radiusMeters) or POLYGON ((lon1 lat1,
+              lon2 lat2, ...))
             </p>
           </div>
           <Button
