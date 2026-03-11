@@ -165,6 +165,127 @@ export type TraccarServer = {
   attributes?: Record<string, unknown>
 }
 
+export type TraccarCommand = {
+  id?: number
+  deviceId?: number
+  description?: string
+  type: string
+  textChannel?: boolean
+  attributes?: Record<string, unknown>
+}
+
+export type TraccarCommandType = {
+  type: string
+}
+
+export type TraccarGeofence = {
+  id: number
+  name: string
+  description?: string
+  area: string
+  calendarId?: number
+  attributes?: Record<string, unknown>
+}
+
+export type TraccarNotification = {
+  id: number
+  type: string
+  description?: string | null
+  always?: boolean
+  commandId?: number
+  notificators?: string
+  calendarId?: number
+  attributes?: Record<string, unknown>
+}
+
+export type TraccarNotificationType = {
+  type: string
+}
+
+export type TraccarDriver = {
+  id: number
+  name: string
+  uniqueId: string
+  attributes?: Record<string, unknown>
+}
+
+export type TraccarMaintenance = {
+  id: number
+  name: string
+  type: string
+  start: number
+  period: number
+  attributes?: Record<string, unknown>
+}
+
+export type TraccarStatistics = {
+  captureTime: string
+  activeUsers: number
+  activeDevices: number
+  requests: number
+  messagesReceived: number
+  messagesStored: number
+}
+
+export type TraccarReportStop = {
+  deviceId: number
+  deviceName?: string
+  duration: number
+  startTime: string
+  endTime: string
+  address?: string
+  lat: number
+  lon: number
+  spentFuel?: number
+  engineHours?: number
+}
+
+export type TraccarReportGeofence = {
+  deviceId: number
+  deviceName?: string
+  geofenceId: number
+  startTime: string
+  endTime: string
+}
+
+export type TraccarPermission = {
+  userId?: number
+  deviceId?: number
+  groupId?: number
+  geofenceId?: number
+  notificationId?: number
+  calendarId?: number
+  attributeId?: number
+  driverId?: number
+  managedUserId?: number
+  commandId?: number
+  maintenanceId?: number
+  orderId?: number
+}
+
+export type TraccarDeviceAccumulators = {
+  deviceId: number
+  totalDistance?: number
+  hours?: number
+}
+
+export type TraccarFullUser = {
+  id: number
+  name: string
+  email: string
+  phone?: string | null
+  readonly?: boolean
+  administrator?: boolean
+  disabled?: boolean
+  expirationTime?: string | null
+  deviceLimit?: number
+  userLimit?: number
+  deviceReadonly?: boolean
+  limitCommands?: boolean
+  password?: string
+  attributes?: Record<string, unknown>
+}
+
 export type RealtimePayload = {
   devices?: TraccarDevice[]
   positions?: TraccarPosition[]
@@ -664,23 +785,437 @@ function parseRealtimePayload(raw: string): RealtimePayload {
   return parsed
 }
 
+// ── Commands ──────────────────────────────────────────────────────────────────
+
+function getCommands(config: TraccarConfig, deviceId?: number) {
+  const query = deviceId
+    ? new URLSearchParams({ deviceId: String(deviceId) })
+    : undefined
+  return request<TraccarCommand[]>(config, "/commands", { query })
+}
+
+function getSavedCommandsForDevice(config: TraccarConfig, deviceId: number) {
+  const query = new URLSearchParams({ deviceId: String(deviceId) })
+  return request<TraccarCommand[]>(config, "/commands/send", { query })
+}
+
+function sendCommand(config: TraccarConfig, command: TraccarCommand) {
+  return request<TraccarCommand>(config, "/commands/send", {
+    method: "POST",
+    body: JSON.stringify(command),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function getCommandTypes(config: TraccarConfig, deviceId?: number) {
+  const query = deviceId
+    ? new URLSearchParams({ deviceId: String(deviceId) })
+    : undefined
+  return request<TraccarCommandType[]>(config, "/commands/types", { query })
+}
+
+function createSavedCommand(config: TraccarConfig, command: TraccarCommand) {
+  return request<TraccarCommand>(config, "/commands", {
+    method: "POST",
+    body: JSON.stringify(command),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateSavedCommand(
+  config: TraccarConfig,
+  id: number,
+  command: TraccarCommand
+) {
+  return request<TraccarCommand>(config, `/commands/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(command),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteSavedCommand(config: TraccarConfig, id: number) {
+  return request<void>(config, `/commands/${id}`, { method: "DELETE" })
+}
+
+// ── Geofences ─────────────────────────────────────────────────────────────────
+
+function getGeofences(config: TraccarConfig) {
+  return request<TraccarGeofence[]>(config, "/geofences")
+}
+
+function createGeofence(
+  config: TraccarConfig,
+  geofence: Omit<TraccarGeofence, "id">
+) {
+  return request<TraccarGeofence>(config, "/geofences", {
+    method: "POST",
+    body: JSON.stringify(geofence),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateGeofence(
+  config: TraccarConfig,
+  id: number,
+  geofence: TraccarGeofence
+) {
+  return request<TraccarGeofence>(config, `/geofences/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(geofence),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteGeofence(config: TraccarConfig, id: number) {
+  return request<void>(config, `/geofences/${id}`, { method: "DELETE" })
+}
+
+function getGeofenceReport(
+  config: TraccarConfig,
+  deviceId: number,
+  from: string,
+  to: string
+) {
+  const query = new URLSearchParams({
+    deviceId: String(deviceId),
+    from,
+    to,
+  })
+  return request<TraccarReportGeofence[]>(config, "/reports/geofences", {
+    query,
+  })
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+function getNotifications(config: TraccarConfig) {
+  return request<TraccarNotification[]>(config, "/notifications")
+}
+
+function createNotification(
+  config: TraccarConfig,
+  notification: Omit<TraccarNotification, "id">
+) {
+  return request<TraccarNotification>(config, "/notifications", {
+    method: "POST",
+    body: JSON.stringify(notification),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateNotification(
+  config: TraccarConfig,
+  id: number,
+  notification: TraccarNotification
+) {
+  return request<TraccarNotification>(config, `/notifications/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(notification),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteNotification(config: TraccarConfig, id: number) {
+  return request<void>(config, `/notifications/${id}`, { method: "DELETE" })
+}
+
+function getNotificationTypes(config: TraccarConfig) {
+  return request<TraccarNotificationType[]>(config, "/notifications/types")
+}
+
+function testNotification(config: TraccarConfig) {
+  return request<void>(config, "/notifications/test", { method: "POST" })
+}
+
+// ── Drivers ───────────────────────────────────────────────────────────────────
+
+function getDrivers(config: TraccarConfig) {
+  return request<TraccarDriver[]>(config, "/drivers")
+}
+
+function createDriver(
+  config: TraccarConfig,
+  driver: Omit<TraccarDriver, "id">
+) {
+  return request<TraccarDriver>(config, "/drivers", {
+    method: "POST",
+    body: JSON.stringify(driver),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateDriver(
+  config: TraccarConfig,
+  id: number,
+  driver: TraccarDriver
+) {
+  return request<TraccarDriver>(config, `/drivers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(driver),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteDriver(config: TraccarConfig, id: number) {
+  return request<void>(config, `/drivers/${id}`, { method: "DELETE" })
+}
+
+// ── Maintenance ───────────────────────────────────────────────────────────────
+
+function getMaintenance(config: TraccarConfig) {
+  return request<TraccarMaintenance[]>(config, "/maintenance")
+}
+
+function createMaintenance(
+  config: TraccarConfig,
+  maintenance: Omit<TraccarMaintenance, "id">
+) {
+  return request<TraccarMaintenance>(config, "/maintenance", {
+    method: "POST",
+    body: JSON.stringify(maintenance),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateMaintenance(
+  config: TraccarConfig,
+  id: number,
+  maintenance: TraccarMaintenance
+) {
+  return request<TraccarMaintenance>(config, `/maintenance/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(maintenance),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteMaintenance(config: TraccarConfig, id: number) {
+  return request<void>(config, `/maintenance/${id}`, { method: "DELETE" })
+}
+
+// ── Statistics ────────────────────────────────────────────────────────────────
+
+function getStatistics(config: TraccarConfig, from: string, to: string) {
+  const query = new URLSearchParams({ from, to })
+  return request<TraccarStatistics[]>(config, "/statistics", { query })
+}
+
+// ── Stops Report ──────────────────────────────────────────────────────────────
+
+function getStopsReport(
+  config: TraccarConfig,
+  deviceId: number,
+  from: string,
+  to: string
+) {
+  const query = new URLSearchParams({
+    deviceId: String(deviceId),
+    from,
+    to,
+  })
+  return request<TraccarReportStop[]>(config, "/reports/stops", { query })
+}
+
+// ── Permissions ───────────────────────────────────────────────────────────────
+
+function linkPermission(config: TraccarConfig, permission: TraccarPermission) {
+  return request<void>(config, "/permissions", {
+    method: "POST",
+    body: JSON.stringify(permission),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function unlinkPermission(
+  config: TraccarConfig,
+  permission: TraccarPermission
+) {
+  return request<void>(config, "/permissions", {
+    method: "DELETE",
+    body: JSON.stringify(permission),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+// ── Users (admin) ─────────────────────────────────────────────────────────────
+
+function getUsers(config: TraccarConfig) {
+  return request<TraccarFullUser[]>(config, "/users")
+}
+
+function createUser(
+  config: TraccarConfig,
+  user: Omit<TraccarFullUser, "id">
+) {
+  return request<TraccarFullUser>(config, "/users", {
+    method: "POST",
+    body: JSON.stringify(user),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateUser(
+  config: TraccarConfig,
+  id: number,
+  user: TraccarFullUser
+) {
+  return request<TraccarFullUser>(config, `/users/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(user),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteUser(config: TraccarConfig, id: number) {
+  return request<void>(config, `/users/${id}`, { method: "DELETE" })
+}
+
+// ── Groups CRUD ───────────────────────────────────────────────────────────────
+
+async function createGroup(
+  config: TraccarConfig,
+  group: Omit<TraccarGroup, "id">
+) {
+  const result = await request<TraccarGroup>(config, "/groups", {
+    method: "POST",
+    body: JSON.stringify(group),
+    headers: { "Content-Type": "application/json" },
+  })
+  clearCache("/groups")
+  return result
+}
+
+async function updateGroup(
+  config: TraccarConfig,
+  id: number,
+  group: TraccarGroup
+) {
+  const result = await request<TraccarGroup>(config, `/groups/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(group),
+    headers: { "Content-Type": "application/json" },
+  })
+  clearCache("/groups")
+  return result
+}
+
+async function deleteGroup(config: TraccarConfig, id: number) {
+  await request<void>(config, `/groups/${id}`, { method: "DELETE" })
+  clearCache("/groups")
+}
+
+// ── Device Accumulators ───────────────────────────────────────────────────────
+
+function updateDeviceAccumulators(
+  config: TraccarConfig,
+  id: number,
+  accumulators: TraccarDeviceAccumulators
+) {
+  return request<void>(config, `/devices/${id}/accumulators`, {
+    method: "PUT",
+    body: JSON.stringify(accumulators),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+// ── Device Sharing ────────────────────────────────────────────────────────────
+
+function shareDevice(
+  config: TraccarConfig,
+  deviceId: number,
+  expiration: string
+) {
+  return request<string>(config, "/devices/share", {
+    method: "POST",
+    body: new URLSearchParams({
+      deviceId: String(deviceId),
+      expiration,
+    }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  })
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────────
+
+function getExportUrl(
+  config: TraccarConfig,
+  format: "csv" | "gpx" | "kml",
+  deviceId: number,
+  from: string,
+  to: string
+) {
+  const base = normalizeServerUrl(config.serverUrl)
+  const params = new URLSearchParams({
+    deviceId: String(deviceId),
+    from,
+    to,
+  })
+  if (config.token) {
+    params.set("token", config.token)
+  }
+  return `${base}/positions/${format}?${params}`
+}
+
+// ── Health ─────────────────────────────────────────────────────────────────────
+
+function getHealth(config: TraccarConfig) {
+  return request<string>(config, "/health")
+}
+
+// ── Events by ID ──────────────────────────────────────────────────────────────
+
+function getEventById(config: TraccarConfig, id: number) {
+  return request<TraccarEvent>(config, `/events/${id}`)
+}
+
 export {
   createDevice,
+  createDriver,
+  createGeofence,
+  createGroup,
+  createMaintenance,
+  createNotification,
+  createSavedCommand,
+  createUser,
   deleteDevice,
+  deleteDriver,
+  deleteGeofence,
+  deleteGroup,
+  deleteMaintenance,
+  deleteNotification,
+  deleteSavedCommand,
+  deleteUser,
   geocode,
   getCalendars,
+  getCommandTypes,
+  getCommands,
   getDevices,
+  getEventById,
   getEvents,
+  getExportUrl,
+  getGeofenceReport,
+  getGeofences,
   getGroups,
+  getHealth,
+  getMaintenance,
+  getNotificationTypes,
+  getNotifications,
+  getDrivers,
   getPositionHistory,
   getPositions,
   getRouteReport,
+  getSavedCommandsForDevice,
   getServer,
   getServerCache,
   getServerTimezones,
   getSession,
+  getStatistics,
+  getStopsReport,
   getSummaryReport,
   getTripReport,
+  getUsers,
+  linkPermission,
   login,
   logout,
   normalizeServerUrl,
@@ -688,9 +1223,21 @@ export {
   parseRealtimePayload,
   rebootServer,
   revokeToken,
+  sendCommand,
+  shareDevice,
+  testNotification,
   toRealtimeUrl,
   triggerServerGc,
+  unlinkPermission,
   updateDevice,
+  updateDeviceAccumulators,
+  updateDriver,
+  updateGeofence,
+  updateGroup,
+  updateMaintenance,
+  updateNotification,
+  updateSavedCommand,
   updateServer,
+  updateUser,
   uploadDeviceImage,
 }

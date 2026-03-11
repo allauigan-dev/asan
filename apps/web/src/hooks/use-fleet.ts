@@ -33,7 +33,9 @@ import {
   getEvents,
   getPositionHistory,
   getPositions,
+  getGeofences,
   getRouteReport,
+  getStopsReport,
   getSummaryReport,
   getTripReport,
   login,
@@ -44,7 +46,9 @@ import {
   type TraccarConfig,
   type TraccarDevice,
   type TraccarEvent,
+  type TraccarGeofence,
   type TraccarPosition,
+  type TraccarReportStop,
   type TraccarReportSummary,
   type TraccarReportTrip,
   type TraccarUser,
@@ -73,6 +77,8 @@ type FleetState = {
   trips: TraccarReportTrip[]
   summary: TraccarReportSummary[]
   events: TraccarEvent[]
+  stops: TraccarReportStop[]
+  geofences: TraccarGeofence[]
 }
 
 const emptyFleet: FleetState = {
@@ -82,6 +88,8 @@ const emptyFleet: FleetState = {
   trips: [],
   summary: [],
   events: [],
+  stops: [],
+  geofences: [],
 }
 
 export function useFleet() {
@@ -421,13 +429,16 @@ export function useFleet() {
 
   // Data fetchers
   async function refreshLiveData(config: TraccarConfig) {
-    const [devicesResponse, positionsResponse] = await Promise.all([
-      getDevices(config),
-      getPositions(config),
-    ])
+    const [devicesResponse, positionsResponse, geofencesResponse] =
+      await Promise.all([
+        getDevices(config),
+        getPositions(config),
+        getGeofences(config).catch(() => []),
+      ])
 
     const safeDevices = ensureArray<TraccarDevice>(devicesResponse)
     const safePositions = ensureArray<TraccarPosition>(positionsResponse)
+    const safeGeofences = ensureArray<TraccarGeofence>(geofencesResponse)
 
     // Seed trail history from initial REST positions
     seedHistory(safePositions)
@@ -436,6 +447,7 @@ export function useFleet() {
       ...current,
       devices: safeDevices,
       positions: safePositions,
+      geofences: safeGeofences,
     }))
 
     const nextDeviceId =
@@ -481,10 +493,11 @@ export function useFleet() {
         }
       }
 
-      const [trips, summary, events] = await Promise.all([
+      const [trips, summary, events, stops] = await Promise.all([
         getTripReport(config, deviceId, from, to),
         getSummaryReport(config, deviceId, from, to),
         getEvents(config, deviceId, from, to),
+        getStopsReport(config, deviceId, from, to).catch(() => []),
       ])
 
       setFleet((current) => ({
@@ -493,6 +506,7 @@ export function useFleet() {
         trips: ensureArray<TraccarReportTrip>(trips),
         summary: ensureArray<TraccarReportSummary>(summary),
         events: ensureArray<TraccarEvent>(events),
+        stops: ensureArray<TraccarReportStop>(stops),
       }))
       setSelectedTripIndex(0)
     } finally {
@@ -719,6 +733,8 @@ export function useFleet() {
           trips: [],
           summary: [],
           events: [],
+          stops: [],
+          geofences: [],
         })
       }
     },

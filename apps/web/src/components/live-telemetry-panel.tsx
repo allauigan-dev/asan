@@ -21,19 +21,24 @@ import {
 import { Separator } from "@workspace/ui/components/separator"
 
 import {
+  Download,
   Edit,
   MapPinned,
-  MoreVertical,
   Route,
+  Share,
   Terminal,
   X,
 } from "@/components/icons"
 import { MapPin, Plus } from "@/components/icons"
+import { SendCommandDialog } from "@/components/send-command-dialog"
+import { ShareDeviceDialog } from "@/components/share-device-dialog"
 import { AuthImage } from "@/components/auth-image"
 import { readStoredConfig, toConfig } from "@/lib/config"
 import {
   geocode,
+  getExportUrl,
   updateDevice,
+  updateDeviceAccumulators,
   deleteDevice,
   getGroups,
   uploadDeviceImage,
@@ -69,6 +74,8 @@ export function LiveTelemetryPanel({
   onDeviceUpdate,
 }: LiveTelemetryPanelProps) {
   const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showCommandDialog, setShowCommandDialog] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
   const [showAddress, setShowAddress] = useState(false)
   const [geocodedAddress, setGeocodedAddress] = useState<string | null>(null)
   const [isLoadingAddress, setIsLoadingAddress] = useState(false)
@@ -146,9 +153,7 @@ export function LiveTelemetryPanel({
               variant="ghost"
               size="icon"
               className="size-7"
-              onClick={() => {
-                /* Placeholder for command functionality */
-              }}
+              onClick={() => setShowCommandDialog(true)}
               title="Send Command"
             >
               <Terminal className="size-4" />
@@ -166,12 +171,36 @@ export function LiveTelemetryPanel({
               variant="ghost"
               size="icon"
               className="size-7"
-              onClick={() => {
-                /* Placeholder for extra functionality */
-              }}
-              title="More Options"
+              onClick={() => setShowShareDialog(true)}
+              title="Share Location"
             >
-              <MoreVertical className="size-4" />
+              <Share className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={() => {
+                const config = toConfig(readStoredConfig())
+                const now = new Date()
+                const from = new Date(
+                  now.getTime() - 6 * 60 * 60 * 1000
+                ).toISOString()
+                const to = now.toISOString()
+                window.open(
+                  getExportUrl(
+                    config,
+                    "csv",
+                    selectedDevice.id,
+                    from,
+                    to
+                  ),
+                  "_blank"
+                )
+              }}
+              title="Export CSV"
+            >
+              <Download className="size-4" />
             </Button>
             <Button
               variant="ghost"
@@ -460,6 +489,22 @@ export function LiveTelemetryPanel({
         </ScrollArea>
       </div>
 
+      {/* Send Command Dialog */}
+      <SendCommandDialog
+        open={showCommandDialog}
+        onOpenChange={setShowCommandDialog}
+        deviceId={selectedDevice.id}
+        deviceName={selectedDevice.name}
+      />
+
+      {/* Share Device Dialog */}
+      <ShareDeviceDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        deviceId={selectedDevice.id}
+        deviceName={selectedDevice.name}
+      />
+
       {/* Edit Device Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="flex max-w-2xl flex-col gap-0 bg-background">
@@ -607,6 +652,8 @@ function DeviceEditForm({
     status: "idle" | "uploading" | "error" | "success"
     message?: string
   }>({ status: "idle" })
+  const [accumulatorDistance, setAccumulatorDistance] = useState("")
+  const [accumulatorHours, setAccumulatorHours] = useState("")
 
   useEffect(() => {
     const config = toConfig(readStoredConfig())
@@ -969,6 +1016,59 @@ function DeviceEditForm({
             </p>
           </div>
         </label>
+      </div>
+
+      {/* Device Accumulators */}
+      <div className="space-y-4 border-t border-border/30 pt-4">
+        <p className="text-xs font-medium text-muted-foreground">
+          Device Accumulators
+        </p>
+        <div className="flex gap-3">
+          <div className="flex-1 space-y-1">
+            <label className="text-xs font-medium text-foreground">
+              Total Distance (km)
+              <Input
+                type="number"
+                value={accumulatorDistance}
+                onChange={(e) => setAccumulatorDistance(e.target.value)}
+                placeholder="0"
+                className="mt-1.5"
+              />
+            </label>
+          </div>
+          <div className="flex-1 space-y-1">
+            <label className="text-xs font-medium text-foreground">
+              Engine Hours
+              <Input
+                type="number"
+                value={accumulatorHours}
+                onChange={(e) => setAccumulatorHours(e.target.value)}
+                placeholder="0"
+                className="mt-1.5"
+              />
+            </label>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={saving || deleting}
+          onClick={async () => {
+            const config = toConfig(readStoredConfig())
+            await updateDeviceAccumulators(config, form.id, {
+              deviceId: form.id,
+              totalDistance: accumulatorDistance
+                ? Number(accumulatorDistance) * 1000
+                : undefined,
+              hours: accumulatorHours
+                ? Number(accumulatorHours)
+                : undefined,
+            })
+          }}
+        >
+          Update Accumulators
+        </Button>
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-2">

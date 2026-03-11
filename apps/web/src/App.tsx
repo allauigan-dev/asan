@@ -21,6 +21,7 @@ import { FleetSidebar } from "@/components/fleet-sidebar"
 import {
   ChevronLeft,
   ChevronRight,
+  Fence,
   LogOut,
   MapPinned,
   Moon,
@@ -29,6 +30,7 @@ import {
   RefreshCw,
   Route,
   Settings,
+  StopCircle,
   SunMedium,
   Zap,
 } from "@/components/icons"
@@ -37,11 +39,13 @@ import { MetricBar } from "@/components/metric-bar"
 import { ReplayController } from "@/components/replay-controller"
 import { ReplayPanel } from "@/components/replay-panel"
 import { SettingsPage } from "@/components/settings-page"
+import { StopTable } from "@/components/stop-table"
 import { TripTable } from "@/components/trip-table"
 import { AuthImage } from "@/components/auth-image"
 import { useFleet, type View } from "@/hooks/use-fleet"
 import { useTheme } from "@/components/theme-provider"
 import {
+  durationLabel,
   formatTimestamp,
   getBatteryLevel,
   getDeviceIcon,
@@ -49,6 +53,28 @@ import {
   toKph,
 } from "@/lib/utils"
 import { getStoredMapStyle, MAP_STYLES, saveMapStyle } from "@/lib/map-styles"
+
+function parseGeofenceCenter(area: string): [number, number] | null {
+  const circleMatch = area.match(
+    /CIRCLE\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*,/i
+  )
+  if (circleMatch) {
+    return [Number(circleMatch[2]), Number(circleMatch[1])]
+  }
+  const polyMatch = area.match(/POLYGON\s*\(\(([^)]+)\)/i)
+  if (polyMatch) {
+    const points = polyMatch[1].split(",").map((p) => {
+      const [lon, lat] = p.trim().split(/\s+/).map(Number)
+      return [lon, lat] as [number, number]
+    })
+    if (points.length > 0) {
+      const avgLon = points.reduce((s, p) => s + p[0], 0) / points.length
+      const avgLat = points.reduce((s, p) => s + p[1], 0) / points.length
+      return [avgLon, avgLat]
+    }
+  }
+  return null
+}
 
 export function App() {
   const fleet = useFleet()
@@ -599,6 +625,65 @@ export function App() {
                   </MapMarker>
                 ) : null
               )}
+            {/* Replay stop markers */}
+            {view === "replay" &&
+              fleet.fleet.stops.map((stop) => (
+                <MapMarker
+                  key={`stop-${stop.startTime}`}
+                  longitude={stop.lon}
+                  latitude={stop.lat}
+                >
+                  <MarkerContent>
+                    <div className="flex size-6 items-center justify-center rounded-full border-2 border-orange-400/30 bg-orange-500 text-white shadow-lg">
+                      <StopCircle className="size-3" />
+                    </div>
+                    <MarkerLabel position="bottom">
+                      {durationLabel(
+                        stop.duration ? stop.duration * 1000 : 0
+                      )}
+                    </MarkerLabel>
+                  </MarkerContent>
+                  <MarkerPopup className="w-52 p-0">
+                    <div className="space-y-1 p-3">
+                      <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                        Stop
+                      </span>
+                      <h3 className="leading-tight font-semibold text-foreground">
+                        {durationLabel(
+                          stop.duration ? stop.duration * 1000 : 0
+                        )}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {stop.address ??
+                          `${stop.lat.toFixed(4)}, ${stop.lon.toFixed(4)}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTimestamp(stop.startTime)}
+                      </p>
+                    </div>
+                  </MarkerPopup>
+                </MapMarker>
+              ))}
+
+            {/* Geofence markers */}
+            {fleet.fleet.geofences.map((gf) => {
+              const center = parseGeofenceCenter(gf.area)
+              if (!center) return null
+              return (
+                <MapMarker
+                  key={`gf-${gf.id}`}
+                  longitude={center[0]}
+                  latitude={center[1]}
+                >
+                  <MarkerContent>
+                    <div className="flex size-6 items-center justify-center rounded-full border-2 border-violet-400/30 bg-violet-500/80 text-white">
+                      <Fence className="size-3" />
+                    </div>
+                    <MarkerLabel position="bottom">{gf.name}</MarkerLabel>
+                  </MarkerContent>
+                </MapMarker>
+              )
+            })}
           </Map>
 
           {/* Replay playback controller overlay */}
@@ -679,9 +764,11 @@ export function App() {
                 isConnected={fleet.connectionState === "connected"}
                 isLoadingReplay={fleet.isLoadingReplay}
                 onLoadReplay={fleet.handleLoadReplay}
+                deviceId={fleet.selectedDeviceId}
               />
 
               <TripTable trips={fleet.fleet.trips} />
+              <StopTable stops={fleet.fleet.stops} />
             </aside>
           ))}
       </div>

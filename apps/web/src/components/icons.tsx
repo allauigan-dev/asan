@@ -337,4 +337,107 @@ export const Helicopter = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const Bell = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+  </IconBase>
+)
+
+export const Users = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </IconBase>
+)
+
+export const Wrench = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+  </IconBase>
+)
+
+export const Fence = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M3 6h18M3 18h18M6 6v12M18 6v12M10 6v12M14 6v12" />
+  </IconBase>
+)
+
+export const Download = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </IconBase>
+)
+
+export const Share = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </IconBase>
+)
+
+export const BarChart = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <line x1="12" y1="20" x2="12" y2="10" />
+    <line x1="18" y1="20" x2="18" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="16" />
+  </IconBase>
+)
+
+export const StopCircle = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <rect
+      x="9"
+      y="9"
+      width="6"
+      height="6"
+      rx="1"
+      fill="currentColor"
+      stroke="none"
+    />
+  </IconBase>
+)
+
+export const Copy = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <rect x="9" y="9" width="13" height="13" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </IconBase>
+)
+
+export const Trash = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </IconBase>
+)
+
+export const Send = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="m22 2-7 20-4-9-9-4z" />
+    <path d="m22 2-11 11" />
+  </IconBase>
+)
+
+export const FolderOpen = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+  </IconBase>
+)
+
+export const Clock = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </IconBase>
+)
+
 export type { IconProps }

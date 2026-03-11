@@ -3,14 +3,16 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
-import { MapPinned } from "@/components/icons"
-import type { TraccarReportTrip } from "@/lib/traccar"
+import { Download, MapPinned } from "@/components/icons"
+import { readStoredConfig, toConfig } from "@/lib/config"
+import { getExportUrl, type TraccarReportTrip } from "@/lib/traccar"
 import type { RouteWindow } from "@/hooks/use-fleet"
 import {
   distanceInKm,
   durationLabel,
   ensureArray,
   formatTimestamp,
+  toIsoValue,
   toKph,
 } from "@/lib/utils"
 
@@ -23,6 +25,7 @@ type ReplayPanelProps = {
   isConnected: boolean
   isLoadingReplay: boolean
   onLoadReplay: () => void
+  deviceId: number
 }
 
 export function ReplayPanel({
@@ -34,6 +37,7 @@ export function ReplayPanel({
   isConnected,
   isLoadingReplay,
   onLoadReplay,
+  deviceId,
 }: ReplayPanelProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -67,6 +71,33 @@ export function ReplayPanel({
           <MapPinned className="size-4" />
           {isLoadingReplay ? "Loading replay..." : "Update route replay"}
         </Button>
+        <div className="flex gap-2">
+          {(["csv", "gpx", "kml"] as const).map((format) => (
+            <Button
+              key={format}
+              variant="outline"
+              size="sm"
+              className="flex-1 text-xs uppercase"
+              disabled={!isConnected || !deviceId}
+              onClick={() => {
+                const config = toConfig(readStoredConfig())
+                window.open(
+                  getExportUrl(
+                    config,
+                    format,
+                    deviceId,
+                    toIsoValue(routeWindow.from),
+                    toIsoValue(routeWindow.to)
+                  ),
+                  "_blank"
+                )
+              }}
+            >
+              <Download className="size-3" />
+              {format}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* Trip list */}
