@@ -24,6 +24,11 @@ import {
   pathDistanceMeters,
 } from "@/lib/utils"
 import {
+  PositionUpdateThrottler,
+  mergeDeviceUpdates,
+  mergePositionUpdates,
+} from "@/lib/map-optimizations"
+import {
   getDevices,
   getEvents,
   getPositionHistory,
@@ -288,9 +293,9 @@ export function useFleet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDeviceId, connectionState])
 
-  // Realtime websocket with batching to avoid per-message re-renders
+  // Realtime websocket with dynamic throttling to avoid per-message re-renders
   const pendingPayloads = useRef<RealtimePayload[]>([])
-  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const positionThrottler = useRef<PositionUpdateThrottler | null>(null)
 
   const flushPayloads = useEffectEvent(() => {
     const batch = pendingPayloads.current
@@ -325,24 +330,11 @@ export function useFleet() {
         ...current,
         devices:
           merged.devices!.length > 0
-            ? current.devices.map((device) => {
-                const nextDevice = merged.devices!.find(
-                  (item) => item.id === device.id
-                )
-                return nextDevice ? { ...device, ...nextDevice } : device
-              })
+            ? mergeDeviceUpdates(current.devices, merged.devices!)
             : current.devices,
         positions:
           merged.positions!.length > 0
-            ? [
-                ...merged.positions!,
-                ...current.positions.filter(
-                  (position) =>
-                    !merged.positions!.some(
-                      (incoming) => incoming.deviceId === position.deviceId
-                    )
-                ),
-              ]
+            ? mergePositionUpdates(current.positions, merged.positions!)
             : current.positions,
         events:
           merged.events!.length > 0
@@ -354,13 +346,23 @@ export function useFleet() {
 
   useEffect(() => {
     if (connectionState !== "connected") {
+      // Cleanup throttler if disconnected
+      if (positionThrottler.current) {
+        positionThrottler.current.destroy()
+        positionThrottler.current = null
+      }
       return undefined
     }
 
     const config = toConfig(connectionForm)
     const socket = new WebSocket(toRealtimeUrl(config))
 
-    const FLUSH_INTERVAL = 2000
+    // Initialize dynamic throttler with adaptive intervals
+    positionThrottler.current = new PositionUpdateThrottler(flushPayloads, {
+      minInterval: 100, // 100ms for high-frequency updates
+      maxInterval: 2000, // 2s for low-frequency updates
+      maxBatchSize: 50, // Force flush after 50 updates
+    })
 
     socket.onmessage = (event) => {
       try {
@@ -370,12 +372,17 @@ export function useFleet() {
         return
       }
 
-      // Schedule a flush if one isn't already pending
-      if (!flushTimer.current) {
-        flushTimer.current = setTimeout(() => {
-          flushTimer.current = null
-          flushPayloads()
-        }, FLUSH_INTERVAL)
+      // Trigger throttled flush (adapts based on update frequency)
+      if (positionThrottler.current) {
+        // Use a dummy position update to trigger the adaptive throttling logic
+        const now = Date.now()
+        positionThrottler.current.addUpdate(0, {
+          id: 0,
+          deviceId: 0,
+          latitude: 0,
+          longitude: 0,
+          serverTime: new Date(now).toISOString(),
+        })
       }
     }
 
@@ -386,13 +393,13 @@ export function useFleet() {
 
     return () => {
       socket.close()
-      if (flushTimer.current) {
-        clearTimeout(flushTimer.current)
-        flushTimer.current = null
+      if (positionThrottler.current) {
+        positionThrottler.current.destroy()
+        positionThrottler.current = null
       }
       pendingPayloads.current = []
     }
-  }, [connectionForm, connectionState])
+  }, [connectionForm, connectionState, flushPayloads])
 
   // Establish a cookie session so /api/media requests can authenticate via
   // credentials: 'include' (Traccar's media endpoint requires cookie auth).

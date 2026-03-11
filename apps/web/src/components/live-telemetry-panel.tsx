@@ -29,12 +29,14 @@ import {
   X,
 } from "@/components/icons"
 import { MapPin, Plus } from "@/components/icons"
+import { AuthImage } from "@/components/auth-image"
 import { readStoredConfig, toConfig } from "@/lib/config"
 import {
   geocode,
   updateDevice,
   deleteDevice,
   getGroups,
+  uploadDeviceImage,
   type TraccarDevice,
   type TraccarEvent,
   type TraccarGroup,
@@ -44,6 +46,7 @@ import {
   ensureArray,
   formatTimestamp,
   getBatteryLevel,
+  getDeviceIcon,
   relativeTime,
   toKph,
 } from "@/lib/utils"
@@ -54,6 +57,7 @@ type LiveTelemetryPanelProps = {
   events: TraccarEvent[]
   onClose: () => void
   onViewReplay: () => void
+  onDeviceUpdate?: () => void
 }
 
 export function LiveTelemetryPanel({
@@ -62,6 +66,7 @@ export function LiveTelemetryPanel({
   events,
   onClose,
   onViewReplay,
+  onDeviceUpdate,
 }: LiveTelemetryPanelProps) {
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showAddress, setShowAddress] = useState(false)
@@ -457,7 +462,7 @@ export function LiveTelemetryPanel({
 
       {/* Edit Device Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="flex max-w-2xl flex-col gap-0">
+        <DialogContent className="flex max-w-2xl flex-col gap-0 bg-background">
           <DialogHeader>
             <DialogTitle>Edit Device</DialogTitle>
             <DialogDescription>
@@ -470,7 +475,7 @@ export function LiveTelemetryPanel({
                 device={selectedDevice}
                 onSuccess={() => {
                   setShowEditDialog(false)
-                  // Optionally refresh device data
+                  onDeviceUpdate?.()
                 }}
                 onCancel={() => setShowEditDialog(false)}
               />
@@ -597,6 +602,11 @@ function DeviceEditForm({
   onCancel: () => void
 }) {
   const [state, setState] = useState<DeviceFormState>({ status: "loading" })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageUploadState, setImageUploadState] = useState<{
+    status: "idle" | "uploading" | "error" | "success"
+    message?: string
+  }>({ status: "idle" })
 
   useEffect(() => {
     const config = toConfig(readStoredConfig())
@@ -616,7 +626,9 @@ function DeviceEditForm({
           message: String(err instanceof Error ? err.message : err),
         })
       })
-  }, [device])
+    setImageFile(null)
+    setImageUploadState({ status: "idle" })
+  }, [device.id])
 
   if (state.status === "loading") {
     return (
@@ -635,6 +647,15 @@ function DeviceEditForm({
   }
 
   const { groups, form, saving, deleting } = state
+  const imageFilename =
+    typeof form.attributes?.deviceImage === "string"
+      ? form.attributes.deviceImage
+      : ""
+  const DeviceIcon = getDeviceIcon(form.category)
+
+  function deviceImageUrl(uniqueId: string, filename: string) {
+    return `/api/media/${uniqueId}/${filename}`
+  }
 
   function setForm(patch: Partial<typeof form>) {
     setState((prev) => {
@@ -687,6 +708,37 @@ function DeviceEditForm({
     }
   }
 
+  function updateImageAttribute(value: string) {
+    const nextAttributes = { ...(form.attributes ?? {}) } as Record<
+      string,
+      unknown
+    >
+    if (value.trim()) {
+      nextAttributes.deviceImage = value.trim()
+    } else {
+      delete nextAttributes.deviceImage
+    }
+    setForm({
+      attributes: Object.keys(nextAttributes).length ? nextAttributes : undefined,
+    })
+  }
+
+  async function handleImageUpload() {
+    if (!imageFile) return
+    setImageUploadState({ status: "uploading" })
+    try {
+      const config = toConfig(readStoredConfig())
+      const filename = await uploadDeviceImage(config, form.id, imageFile)
+      updateImageAttribute(filename || imageFile.name)
+      setImageUploadState({ status: "success" })
+    } catch (err: unknown) {
+      setImageUploadState({
+        status: "error",
+        message: String(err instanceof Error ? err.message : err),
+      })
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Required fields */}
@@ -694,27 +746,28 @@ function DeviceEditForm({
         <div className="space-y-2">
           <label className="text-xs font-medium text-foreground">
             Name (required)
+            <Input
+              value={form.name ?? ""}
+              onChange={(e) => setForm({ name: e.target.value })}
+              placeholder="My Vehicle"
+              required
+              disabled={saving || deleting}
+              className="mt-1.5"
+            />
           </label>
-          <Input
-            value={form.name ?? ""}
-            onChange={(e) => setForm({ name: e.target.value })}
-            placeholder="My Vehicle"
-            required
-            disabled={saving || deleting}
-            autoFocus
-          />
         </div>
         <div className="space-y-2">
           <label className="text-xs font-medium text-foreground">
             Unique ID (required)
+            <Input
+              value={form.uniqueId ?? ""}
+              onChange={(e) => setForm({ uniqueId: e.target.value })}
+              placeholder="123456789012345"
+              required
+              disabled={saving || deleting || true}
+              className="mt-1.5"
+            />
           </label>
-          <Input
-            value={form.uniqueId ?? ""}
-            onChange={(e) => setForm({ uniqueId: e.target.value })}
-            placeholder="123456789012345"
-            required
-            disabled={saving || deleting || true}
-          />
           <p className="text-[11px] text-muted-foreground">
             Device hardware identifier cannot be changed
           </p>
@@ -730,88 +783,175 @@ function DeviceEditForm({
         <div className="space-y-2">
           <label className="text-xs font-medium text-foreground">
             Category
-          </label>
-          <Select
-            value={form.category ?? "none"}
-            onValueChange={(value) =>
-              setForm({
-                category: value === "none" ? undefined : value,
-              })
-            }
-            disabled={saving || deleting}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No category</SelectItem>
-              {DEVICE_CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {groups.length > 0 && (
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-foreground">Group</label>
             <Select
-              value={form.groupId?.toString() ?? "none"}
+              value={form.category ?? "none"}
               onValueChange={(value) =>
                 setForm({
-                  groupId: value === "none" ? undefined : Number(value),
+                  category: value === "none" ? undefined : value,
                 })
               }
               disabled={saving || deleting}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="No group" />
+              <SelectTrigger className="mt-1.5 w-full">
+                <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No group</SelectItem>
-                {groups.map((group) => (
-                  <SelectItem key={group.id} value={group.id.toString()}>
-                    {group.name}
+                <SelectItem value="none">No category</SelectItem>
+                {DEVICE_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </label>
+        </div>
+
+        {groups.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-foreground">
+              Group
+              <Select
+                value={form.groupId?.toString() ?? "none"}
+                onValueChange={(value) =>
+                  setForm({
+                    groupId: value === "none" ? undefined : Number(value),
+                  })
+                }
+                disabled={saving || deleting}
+              >
+                <SelectTrigger className="mt-1.5 w-full">
+                  <SelectValue placeholder="No group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No group</SelectItem>
+                  {groups.map((group) => (
+                    <SelectItem key={group.id} value={group.id.toString()}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
           </div>
         )}
 
         <div className="space-y-2">
           <label className="text-xs font-medium text-foreground">
             Phone Number
+            <Input
+              value={form.phone ?? ""}
+              onChange={(e) => setForm({ phone: e.target.value })}
+              placeholder="+1234567890"
+              type="tel"
+              disabled={saving || deleting}
+              className="mt-1.5"
+            />
           </label>
-          <Input
-            value={form.phone ?? ""}
-            onChange={(e) => setForm({ phone: e.target.value })}
-            placeholder="+1234567890"
-            type="tel"
-            disabled={saving || deleting}
-          />
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-foreground">Model</label>
-          <Input
-            value={form.model ?? ""}
-            onChange={(e) => setForm({ model: e.target.value })}
-            placeholder="GPS Tracker Pro"
-            disabled={saving || deleting}
-          />
+          <label className="text-xs font-medium text-foreground">
+            Model
+            <Input
+              value={form.model ?? ""}
+              onChange={(e) => setForm({ model: e.target.value })}
+              placeholder="GPS Tracker Pro"
+              disabled={saving || deleting}
+              className="mt-1.5"
+            />
+          </label>
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-foreground">Contact</label>
-          <Input
-            value={form.contact ?? ""}
-            onChange={(e) => setForm({ contact: e.target.value })}
-            placeholder="John Doe"
-            disabled={saving || deleting}
-          />
+          <label className="text-xs font-medium text-foreground">
+            Contact
+            <Input
+              value={form.contact ?? ""}
+              onChange={(e) => setForm({ contact: e.target.value })}
+              placeholder="John Doe"
+              disabled={saving || deleting}
+              className="mt-1.5"
+            />
+          </label>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-foreground">
+            Device Image
+          </span>
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border/40 bg-muted/40">
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <DeviceIcon className="size-6" />
+              </div>
+              {imageFilename && (
+                <AuthImage
+                  src={deviceImageUrl(form.uniqueId, imageFilename)}
+                  alt={form.name}
+                  className="absolute inset-0 z-10 size-full bg-background object-cover"
+                />
+              )}
+            </div>
+            <div className="min-w-[220px] flex-1 space-y-2">
+              <Input
+                value={imageFilename}
+                onChange={(e) => updateImageAttribute(e.target.value)}
+                placeholder="device-photo.jpg"
+                disabled={saving || deleting}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setImageFile(e.target.files?.[0] ?? null)
+                  }
+                  disabled={saving || deleting || imageUploadState.status === "uploading"}
+                  className="min-w-[220px]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleImageUpload}
+                  disabled={
+                    saving ||
+                    deleting ||
+                    !imageFile ||
+                    imageUploadState.status === "uploading"
+                  }
+                >
+                  {imageUploadState.status === "uploading"
+                    ? "Uploading…"
+                    : "Upload"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateImageAttribute("")}
+                  disabled={saving || deleting || !imageFilename}
+                >
+                  Remove
+                </Button>
+              </div>
+              {imageUploadState.status === "error" && (
+                <p className="text-[11px] text-destructive">
+                  {imageUploadState.message ?? "Upload failed"}
+                </p>
+              )}
+              {imageUploadState.status === "success" && (
+                <p className="text-[11px] text-muted-foreground">
+                  Image uploaded. Save changes to persist.
+                </p>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Upload an image or paste an existing filename from the media
+            library.
+          </p>
         </div>
 
         <label className="flex cursor-pointer items-start gap-3">

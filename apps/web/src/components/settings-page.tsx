@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   Truck,
 } from "@/components/icons"
+import { AuthImage } from "@/components/auth-image"
 import { readStoredConfig, toConfig, type ConnectionForm } from "@/lib/config"
 import { getDeviceIcon } from "@/lib/utils"
 import {
@@ -46,6 +47,7 @@ import {
   triggerServerGc,
   updateDevice,
   updateServer,
+  uploadDeviceImage,
   type TraccarDevice,
   type TraccarGroup,
   type TraccarServer,
@@ -62,6 +64,8 @@ type SettingsPageProps = {
   onClose?: () => void
   /** When true, renders as a standalone login screen (no nav chrome) */
   loginMode?: boolean
+  /** Callback when device is updated (to refresh fleet state) */
+  onDeviceUpdate?: () => void
 }
 
 export function SettingsPage({
@@ -70,6 +74,7 @@ export function SettingsPage({
   onConnect,
   onClose,
   loginMode = false,
+  onDeviceUpdate,
 }: SettingsPageProps) {
   const [form, setForm] = useState<ConnectionForm>(() => readStoredConfig())
   const [activeTab, setActiveTab] = useState<SettingsTab>("connection")
@@ -171,7 +176,7 @@ export function SettingsPage({
             <ServerTab connectionForm={form} />
           )}
           {activeTab === "devices" && isConnected && (
-            <DevicesTab connectionForm={form} />
+            <DevicesTab connectionForm={form} onDeviceUpdate={onDeviceUpdate} />
           )}
         </div>
       </ScrollArea>
@@ -301,47 +306,46 @@ function ConnectionForm({
             placeholder="6-digit code"
             inputMode="numeric"
             autoComplete="one-time-code"
-            autoFocus
           />
         ) : (
           <>
             <label className="text-xs font-medium text-muted-foreground">
               Server URL
+              <Input
+                value={form.serverUrl}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    serverUrl: event.target.value,
+                  }))
+                }
+                placeholder="https://your-traccar-server.com"
+                disabled={isConnecting}
+                className="mt-1.5"
+              />
             </label>
-            <Input
-              value={form.serverUrl}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  serverUrl: event.target.value,
-                }))
-              }
-              placeholder="https://your-traccar-server.com"
-              disabled={isConnecting}
-              autoFocus
-            />
 
             <label className="text-xs font-medium text-muted-foreground">
               Authentication
+              <Select
+                value={form.authMode}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    authMode: value as AuthMode,
+                  }))
+                }
+                disabled={isConnecting}
+              >
+                <SelectTrigger className="mt-1.5 w-full">
+                  <SelectValue placeholder="Auth mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="session">Email & Password</SelectItem>
+                  <SelectItem value="token">API Token</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
-            <Select
-              value={form.authMode}
-              onValueChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  authMode: value as AuthMode,
-                }))
-              }
-              disabled={isConnecting}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Auth mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="session">Email & Password</SelectItem>
-                <SelectItem value="token">API Token</SelectItem>
-              </SelectContent>
-            </Select>
 
             {form.authMode === "session" ? (
               <>
@@ -936,7 +940,13 @@ type DevicesTabState =
       devices: TraccarDevice[]
     }
 
-function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
+function DevicesTab({
+  connectionForm,
+  onDeviceUpdate,
+}: {
+  connectionForm: ConnectionForm
+  onDeviceUpdate?: () => void
+}) {
   const [state, setState] = useState<DevicesTabState>({ status: "loading" })
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<TraccarDevice | null>(null)
@@ -971,6 +981,7 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
   function handleDeviceUpdated() {
     setEditingDevice(null)
     loadDevices()
+    onDeviceUpdate?.()
   }
 
   if (state.status === "loading") {
@@ -1115,7 +1126,7 @@ function DevicesTab({ connectionForm }: { connectionForm: ConnectionForm }) {
         open={!!editingDevice}
         onOpenChange={(open) => !open && setEditingDevice(null)}
       >
-        <DialogContent className="flex max-w-2xl flex-col gap-0">
+        <DialogContent className="flex max-w-2xl flex-col gap-0 bg-background">
           <DialogHeader>
             <DialogTitle>Edit Device</DialogTitle>
             <DialogDescription>
@@ -1165,6 +1176,11 @@ function DeviceForm({
   onCancel: () => void
 }) {
   const [state, setState] = useState<DeviceFormState>({ status: "loading" })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageUploadState, setImageUploadState] = useState<{
+    status: "idle" | "uploading" | "error" | "success"
+    message?: string
+  }>({ status: "idle" })
   const isEditing = !!device
 
   useEffect(() => {
@@ -1189,7 +1205,15 @@ function DeviceForm({
           message: String(err instanceof Error ? err.message : err),
         })
       })
-  }, [connectionForm, device])
+    setImageFile(null)
+    setImageUploadState({ status: "idle" })
+  }, [
+    connectionForm.serverUrl,
+    connectionForm.authMode,
+    connectionForm.activeToken,
+    connectionForm.token,
+    device?.id,
+  ])
 
   if (state.status === "loading") {
     return (
@@ -1208,6 +1232,15 @@ function DeviceForm({
   }
 
   const { groups, form, saving, deleting } = state
+  const imageFilename =
+    typeof form.attributes?.deviceImage === "string"
+      ? form.attributes.deviceImage
+      : ""
+  const DeviceIcon = getDeviceIcon(form.category)
+
+  function deviceImageUrl(uniqueId: string, filename: string) {
+    return `/api/media/${uniqueId}/${filename}`
+  }
 
   function setForm(patch: Partial<typeof form>) {
     setState((prev) => {
@@ -1279,6 +1312,37 @@ function DeviceForm({
     }
   }
 
+  function updateImageAttribute(value: string) {
+    const nextAttributes = { ...(form.attributes ?? {}) } as Record<
+      string,
+      unknown
+    >
+    if (value.trim()) {
+      nextAttributes.deviceImage = value.trim()
+    } else {
+      delete nextAttributes.deviceImage
+    }
+    setForm({
+      attributes: Object.keys(nextAttributes).length ? nextAttributes : undefined,
+    })
+  }
+
+  async function handleImageUpload() {
+    if (!imageFile || !isEditing) return
+    setImageUploadState({ status: "uploading" })
+    try {
+      const config = toConfig(connectionForm)
+      const filename = await uploadDeviceImage(config, form.id, imageFile)
+      updateImageAttribute(filename || imageFile.name)
+      setImageUploadState({ status: "success" })
+    } catch (err: unknown) {
+      setImageUploadState({
+        status: "error",
+        message: String(err instanceof Error ? err.message : err),
+      })
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Required fields */}
@@ -1293,7 +1357,6 @@ function DeviceForm({
             placeholder="My Vehicle"
             required
             disabled={saving || deleting}
-            autoFocus
           />
         </FieldRow>
         <FieldRow
@@ -1396,6 +1459,82 @@ function DeviceForm({
             disabled={saving || deleting}
           />
         </FieldRow>
+
+        {isEditing && (
+          <FieldRow
+            label="Device Image"
+            description="Upload an image or paste an existing filename from the media library"
+          >
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border/40 bg-muted/40">
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                  <DeviceIcon className="size-6" />
+                </div>
+                {imageFilename && (
+                  <AuthImage
+                    src={deviceImageUrl(form.uniqueId, imageFilename)}
+                    alt={form.name}
+                    className="absolute inset-0 z-10 size-full bg-background object-cover"
+                  />
+                )}
+              </div>
+              <div className="min-w-[220px] flex-1 space-y-2">
+                <Input
+                  value={imageFilename}
+                  onChange={(e) => updateImageAttribute(e.target.value)}
+                  placeholder="device-photo.jpg"
+                  disabled={saving || deleting}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      setImageFile(e.target.files?.[0] ?? null)
+                    }
+                    disabled={saving || deleting || imageUploadState.status === "uploading"}
+                    className="min-w-[220px]"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleImageUpload}
+                    disabled={
+                      saving ||
+                      deleting ||
+                      !imageFile ||
+                      imageUploadState.status === "uploading"
+                    }
+                  >
+                    {imageUploadState.status === "uploading"
+                      ? "Uploading…"
+                      : "Upload"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateImageAttribute("")}
+                    disabled={saving || deleting || !imageFilename}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                {imageUploadState.status === "error" && (
+                  <p className="text-[11px] text-destructive">
+                    {imageUploadState.message ?? "Upload failed"}
+                  </p>
+                )}
+                {imageUploadState.status === "success" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Image uploaded. Save changes to persist.
+                  </p>
+                )}
+              </div>
+            </div>
+          </FieldRow>
+        )}
 
         <ToggleRow
           label="Disabled"

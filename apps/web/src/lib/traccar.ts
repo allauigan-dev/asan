@@ -7,6 +7,59 @@ export class TotpRequiredError extends Error {
   }
 }
 
+// ── Simple cache mechanism ────────────────────────────────────────────────────
+
+type CacheEntry<T> = {
+  data: T
+  timestamp: number
+}
+
+const cache = new Map<string, CacheEntry<unknown>>()
+
+function getCacheKey(config: TraccarConfig, endpoint: string): string {
+  return `${config.serverUrl}:${endpoint}`
+}
+
+function getCached<T>(
+  config: TraccarConfig,
+  endpoint: string,
+  ttlMs: number
+): T | null {
+  const key = getCacheKey(config, endpoint)
+  const entry = cache.get(key) as CacheEntry<T> | undefined
+
+  if (!entry) return null
+
+  const age = Date.now() - entry.timestamp
+  if (age > ttlMs) {
+    cache.delete(key)
+    return null
+  }
+
+  return entry.data
+}
+
+function setCached<T>(
+  config: TraccarConfig,
+  endpoint: string,
+  data: T
+): void {
+  const key = getCacheKey(config, endpoint)
+  cache.set(key, { data, timestamp: Date.now() })
+}
+
+export function clearCache(endpoint?: string): void {
+  if (endpoint) {
+    for (const key of cache.keys()) {
+      if (key.endsWith(`:${endpoint}`)) {
+        cache.delete(key)
+      }
+    }
+  } else {
+    cache.clear()
+  }
+}
+
 export type TraccarConfig = {
   serverUrl: string
   wsUrl?: string
@@ -363,8 +416,14 @@ function logout(config: TraccarConfig) {
   return request<string>(config, "/session", { method: "DELETE" })
 }
 
-function getDevices(config: TraccarConfig) {
-  return request<TraccarDevice[]>(config, "/devices")
+async function getDevices(config: TraccarConfig) {
+  const CACHE_TTL = 30 * 1000 // 30 seconds (devices update frequently)
+  const cached = getCached<TraccarDevice[]>(config, "/devices", CACHE_TTL)
+  if (cached) return cached
+
+  const devices = await request<TraccarDevice[]>(config, "/devices")
+  setCached(config, "/devices", devices)
+  return devices
 }
 
 function geocode(
@@ -379,33 +438,70 @@ function geocode(
   return request<string>(config, `/server/geocode?${params}`)
 }
 
-function createDevice(
+async function createDevice(
   config: TraccarConfig,
   device: Omit<TraccarDevice, "id">
 ) {
-  return request<TraccarDevice>(config, "/devices", {
+  const result = await request<TraccarDevice>(config, "/devices", {
     method: "POST",
     body: JSON.stringify(device),
     headers: { "Content-Type": "application/json" },
   })
+  clearCache("/devices")
+  return result
 }
 
-function updateDevice(
+async function updateDevice(
   config: TraccarConfig,
   id: number,
   device: TraccarDevice
 ) {
-  return request<TraccarDevice>(config, `/devices/${id}`, {
+  const result = await request<TraccarDevice>(config, `/devices/${id}`, {
     method: "PUT",
     body: JSON.stringify(device),
     headers: { "Content-Type": "application/json" },
   })
+  clearCache("/devices")
+  return result
 }
 
-function deleteDevice(config: TraccarConfig, id: number) {
-  return request<void>(config, `/devices/${id}`, {
+async function deleteDevice(config: TraccarConfig, id: number) {
+  await request<void>(config, `/devices/${id}`, {
     method: "DELETE",
   })
+  clearCache("/devices")
+}
+
+async function uploadDeviceImage(
+  config: TraccarConfig,
+  id: number,
+  imageFile: File
+): Promise<string> {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/devices/${id}/image`)
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: imageFile,
+    headers: createHeaders(config, {
+      "Content-Type": imageFile.type || "image/*",
+    }),
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Invalid credentials or session expired.")
+    }
+    if (response.status === 400) {
+      throw new Error("Invalid image type or size.")
+    }
+    if (response.status === 404) {
+      throw new Error("Device not found.")
+    }
+    const message = await response.text()
+    throw new Error(message || `Upload failed with status ${response.status}`)
+  }
+
+  return await response.text()
 }
 
 export type TraccarGroup = {
@@ -415,8 +511,14 @@ export type TraccarGroup = {
   attributes?: Record<string, unknown>
 }
 
-function getGroups(config: TraccarConfig) {
-  return request<TraccarGroup[]>(config, "/groups")
+async function getGroups(config: TraccarConfig) {
+  const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+  const cached = getCached<TraccarGroup[]>(config, "/groups", CACHE_TTL)
+  if (cached) return cached
+
+  const groups = await request<TraccarGroup[]>(config, "/groups")
+  setCached(config, "/groups", groups)
+  return groups
 }
 
 export type TraccarCalendar = {
@@ -590,4 +692,5 @@ export {
   triggerServerGc,
   updateDevice,
   updateServer,
+  uploadDeviceImage,
 }
