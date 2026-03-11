@@ -16,6 +16,7 @@ import {
 import { Separator } from "@workspace/ui/components/separator"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 
+import { preloadDeviceIcons } from "@/lib/map-optimizations"
 import { FleetSidebar } from "@/components/fleet-sidebar"
 import {
   ChevronLeft,
@@ -47,6 +48,7 @@ import {
   relativeTime,
   toKph,
 } from "@/lib/utils"
+import { getStoredMapStyle, MAP_STYLES, saveMapStyle } from "@/lib/map-styles"
 
 export function App() {
   const fleet = useFleet()
@@ -63,6 +65,11 @@ export function App() {
   const lastFlewToDeviceId = useRef<number | null>(null)
   const [replayCollapsed, setReplayCollapsed] = useState(false)
   const [mapZoom, setMapZoom] = useState(11.2)
+  const [mapStyleId, setMapStyleId] = useState<string>(
+    () => getStoredMapStyle().id
+  )
+
+  const mapStyle = MAP_STYLES[mapStyleId] ?? MAP_STYLES.carto
 
   const CLUSTER_MAX_ZOOM = 10
 
@@ -90,6 +97,30 @@ export function App() {
   const toggleTheme = () => {
     setTheme(isDark ? "light" : "dark")
   }
+
+  const cycleMapStyle = () => {
+    const styleIds = Object.keys(MAP_STYLES)
+    const currentIndex = styleIds.indexOf(mapStyleId)
+    const nextId =
+      styleIds[(currentIndex >= 0 ? currentIndex + 1 : 0) % styleIds.length] ??
+      "carto"
+
+    setMapStyleId(nextId)
+    saveMapStyle(nextId)
+
+    const nextStyle = MAP_STYLES[nextId] ?? MAP_STYLES.carto
+    mapRef.current?.easeTo({
+      pitch: nextStyle.defaultPitch ?? 0,
+      duration: 500,
+    })
+  }
+
+  // Preload device icons for map rendering optimization
+  useEffect(() => {
+    preloadDeviceIcons().catch((err) => {
+      console.warn("Failed to preload device icons:", err)
+    })
+  }, [])
 
   // 1. Live View map follow logic
   useEffect(() => {
@@ -267,6 +298,7 @@ export function App() {
               fleet.handleConnect(form)
             }}
             onClose={() => setShowSettings(false)}
+            onDeviceUpdate={() => fleet.handleRefresh()}
           />
         </div>
       ) : null}
@@ -284,13 +316,34 @@ export function App() {
         {/* Center — Map */}
         <div
           className="relative min-w-0 flex-1"
+          role="application"
+          aria-label="Interactive map view"
           onClick={(e) => {
             const canvas = mapRef.current?.getCanvas()
             if (canvas && e.target === canvas) {
               fleet.setSelectedDeviceId(0)
             }
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              fleet.setSelectedDeviceId(0)
+            }
+          }}
         >
+          <div className="absolute top-4 right-4 z-20">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-2 shadow-sm"
+              onClick={cycleMapStyle}
+              title="Switch map style"
+            >
+              <MapPinned className="size-4" />
+              {mapStyle.name}
+            </Button>
+          </div>
+
           <Map
             ref={mapRef}
             className="absolute inset-0 h-full w-full"
@@ -298,6 +351,11 @@ export function App() {
             zoom={11.2}
             attributionControl={false}
             onViewportChange={(vp) => setMapZoom(vp.zoom)}
+            styles={
+              mapStyle.id === "carto"
+                ? undefined
+                : { light: mapStyle.light, dark: mapStyle.dark }
+            }
           >
             <MapControls
               position="bottom-right"
@@ -567,6 +625,7 @@ export function App() {
               events={fleet.fleet.events}
               onClose={() => fleet.setSelectedDeviceId(0)}
               onViewReplay={() => setView("replay")}
+              onDeviceUpdate={() => fleet.handleRefresh()}
             />
           )}
         </div>
