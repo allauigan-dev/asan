@@ -18,6 +18,7 @@ import {
   createGeofence,
   deleteGeofence,
   getDevices,
+  getEntityDevices,
   getGeofences,
   updateGeofence,
   type TraccarDevice,
@@ -32,23 +33,43 @@ export function GeofencePanel({
 }) {
   const [geofences, setGeofences] = useState<TraccarGeofence[]>([])
   const [devices, setDevices] = useState<TraccarDevice[]>([])
+  const [deviceConnections, setDeviceConnections] = useState<
+    Record<number, number[]>
+  >({})
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<TraccarGeofence | null>(null)
   const [showDialog, setShowDialog] = useState(false)
 
-  function load() {
+  async function load() {
     const config = toConfig(readStoredConfig())
     setLoading(true)
-    Promise.all([getGeofences(config), getDevices(config)])
-      .then(([gf, dev]) => {
-        setGeofences(gf)
-        setDevices(dev)
-      })
-      .catch(() => {
-        setGeofences([])
-        setDevices([])
-      })
-      .finally(() => setLoading(false))
+    try {
+      const [gf, dev] = await Promise.all([
+        getGeofences(config),
+        getDevices(config),
+      ])
+      setGeofences(gf)
+      setDevices(dev)
+
+      // Load device connections for each geofence
+      const connections: Record<number, number[]> = {}
+      await Promise.all(
+        gf.map(async (geofence) => {
+          connections[geofence.id] = await getEntityDevices(
+            config,
+            geofence.id,
+            "geofence"
+          )
+        })
+      )
+      setDeviceConnections(connections)
+    } catch {
+      setGeofences([])
+      setDevices([])
+      setDeviceConnections({})
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(load, [])
@@ -144,7 +165,7 @@ export function GeofencePanel({
                   <ExpandableDeviceList
                     entityId={gf.id}
                     entityType="geofence"
-                    connectedDeviceIds={[]}
+                    connectedDeviceIds={deviceConnections[gf.id] || []}
                     allDevices={devices}
                     onConnectionsChange={load}
                   />

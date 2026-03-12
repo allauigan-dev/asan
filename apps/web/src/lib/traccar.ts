@@ -1280,24 +1280,46 @@ export async function deletePermission(
 
 /**
  * Get all entity IDs of a given type connected to a device
- * This requires fetching all permissions and filtering for the device
  */
 export async function getDevicePermissions(
   config: TraccarConfig,
   deviceId: number,
   type: PermissionType
 ): Promise<number[]> {
-  // Traccar doesn't have a direct endpoint for device permissions
-  // We need to fetch the relevant entities and check which ones are linked
-  const fieldName = PERMISSION_FIELD_MAP[type]
+  try {
+    const permissions = await apiRequest<TraccarPermission[]>(
+      config,
+      "/permissions"
+    )
+    const fieldName = PERMISSION_FIELD_MAP[type]
+    return permissions
+      .filter((p) => p.deviceId === deviceId && p[fieldName])
+      .map((p) => p[fieldName] as number)
+  } catch {
+    return []
+  }
+}
 
-  // For each entity type, we'll need to fetch differently
-  // This is a simplified approach - actual implementation may need adjustment
-  // based on Traccar API capabilities
-
-  // For now, return empty array - will be implemented based on actual API
-  // TODO: Implement based on Traccar API endpoints for permissions
-  return []
+/**
+ * Get all device IDs connected to an entity
+ */
+export async function getEntityDevices(
+  config: TraccarConfig,
+  entityId: number,
+  type: PermissionType
+): Promise<number[]> {
+  try {
+    const permissions = await apiRequest<TraccarPermission[]>(
+      config,
+      "/permissions"
+    )
+    const fieldName = PERMISSION_FIELD_MAP[type]
+    return permissions
+      .filter((p) => p[fieldName] === entityId && p.deviceId)
+      .map((p) => p.deviceId as number)
+  } catch {
+    return []
+  }
 }
 
 export {
