@@ -17,10 +17,13 @@ import { readStoredConfig, toConfig } from "@/lib/config"
 import {
   createGeofence,
   deleteGeofence,
+  getDevices,
   getGeofences,
   updateGeofence,
+  type TraccarDevice,
   type TraccarGeofence,
 } from "@/lib/traccar"
+import { ExpandableDeviceList } from "./expandable-device-list"
 
 export function GeofencePanel({
   onDrawGeofence,
@@ -28,6 +31,7 @@ export function GeofencePanel({
   onDrawGeofence?: () => void
 }) {
   const [geofences, setGeofences] = useState<TraccarGeofence[]>([])
+  const [devices, setDevices] = useState<TraccarDevice[]>([])
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<TraccarGeofence | null>(null)
   const [showDialog, setShowDialog] = useState(false)
@@ -35,9 +39,15 @@ export function GeofencePanel({
   function load() {
     const config = toConfig(readStoredConfig())
     setLoading(true)
-    getGeofences(config)
-      .then(setGeofences)
-      .catch(() => setGeofences([]))
+    Promise.all([getGeofences(config), getDevices(config)])
+      .then(([gf, dev]) => {
+        setGeofences(gf)
+        setDevices(dev)
+      })
+      .catch(() => {
+        setGeofences([])
+        setDevices([])
+      })
       .finally(() => setLoading(false))
   }
 
@@ -96,36 +106,48 @@ export function GeofencePanel({
         ) : (
           <div className="space-y-2">
             {geofences.map((gf) => (
-              <Card
-                key={gf.id}
-                className="cursor-pointer"
-                onClick={() => {
-                  setEditItem(gf)
-                  setShowDialog(true)
-                }}
-              >
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <Fence className="size-4 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">{gf.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {gf.area.substring(0, 60)}
-                        {gf.area.length > 60 ? "…" : ""}
-                      </p>
+              <Card key={gf.id}>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Fence className="size-4 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{gf.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {gf.area.substring(0, 60)}
+                          {gf.area.length > 60 ? "…" : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => {
+                          setEditItem(gf)
+                          setShowDialog(true)
+                        }}
+                      >
+                        <Pencil className="size-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => handleDelete(gf.id)}
+                      >
+                        <Trash className="size-4" />
+                      </Button>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDelete(gf.id)
-                    }}
-                  >
-                    <Trash className="size-4" />
-                  </Button>
+                  <ExpandableDeviceList
+                    entityId={gf.id}
+                    entityType="geofence"
+                    connectedDeviceIds={[]}
+                    allDevices={devices}
+                    onConnectionsChange={load}
+                  />
                 </CardContent>
               </Card>
             ))}
