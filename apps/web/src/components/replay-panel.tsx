@@ -5,7 +5,7 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 import { Download, MapPinned } from "@/components/icons"
 import { readStoredConfig, toConfig } from "@/lib/config"
-import { getExportUrl, type TraccarReportTrip } from "@/lib/traccar"
+import { downloadExport, type TraccarReportTrip } from "@/lib/traccar"
 import type { RouteWindow } from "@/hooks/use-fleet"
 import {
   distanceInKm,
@@ -81,16 +81,13 @@ export function ReplayPanel({
               disabled={!isConnected || !deviceId}
               onClick={() => {
                 const config = toConfig(readStoredConfig())
-                window.open(
-                  getExportUrl(
-                    config,
-                    format,
-                    deviceId,
-                    toIsoValue(routeWindow.from),
-                    toIsoValue(routeWindow.to)
-                  ),
-                  "_blank"
-                )
+                downloadExport(
+                  config,
+                  format,
+                  deviceId,
+                  toIsoValue(routeWindow.from),
+                  toIsoValue(routeWindow.to)
+                ).catch(() => {})
               }}
             >
               <Download className="size-3" />

@@ -5,10 +5,16 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
-import { ChevronLeft, ChevronRight, Search, Truck } from "@/components/icons"
+import {
+  BatteryIndicator,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "@/components/icons"
 import type { TraccarDevice, TraccarPosition } from "@/lib/traccar"
 import {
   getBatteryLevel,
+  getDeviceIcon,
   relativeTime,
   statusVariant,
   toKph,
@@ -110,6 +116,7 @@ export function FleetSidebar({
             const position = positionsByDevice.get(device.id)
             const battery = getBatteryLevel(position)
             const active = device.id === selectedDeviceId
+            const DeviceIcon = getDeviceIcon(device.category)
             return (
               <button
                 key={device.id}
@@ -139,17 +146,18 @@ export function FleetSidebar({
                       {toKph(position?.speed)} km/h
                     </p>
                   </div>
-                  <Truck className="size-4 text-muted-foreground" />
+                  <DeviceIcon className="size-4 text-muted-foreground" />
                 </div>
                 <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
                     {relativeTime(position?.fixTime ?? position?.deviceTime)}
                   </span>
-                  <span>
-                    {battery !== null
-                      ? `${battery}% battery`
-                      : "No battery data"}
-                  </span>
+                  {battery !== null && (
+                    <div className="flex items-center gap-1">
+                      <BatteryIndicator level={battery} className="size-4" />
+                      <span>{battery}%</span>
+                    </div>
+                  )}
                 </div>
               </button>
             )

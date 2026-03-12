@@ -35,8 +35,8 @@ import { ShareDeviceDialog } from "@/components/share-device-dialog"
 import { AuthImage } from "@/components/auth-image"
 import { readStoredConfig, toConfig } from "@/lib/config"
 import {
+  downloadExport,
   geocode,
-  getExportUrl,
   updateDevice,
   updateDeviceAccumulators,
   deleteDevice,
@@ -187,10 +187,7 @@ export function LiveTelemetryPanel({
                   now.getTime() - 6 * 60 * 60 * 1000
                 ).toISOString()
                 const to = now.toISOString()
-                window.open(
-                  getExportUrl(config, "csv", selectedDevice.id, from, to),
-                  "_blank"
-                )
+                downloadExport(config, "csv", selectedDevice.id, from, to).catch(() => {})
               }}
               title="Export CSV"
             >

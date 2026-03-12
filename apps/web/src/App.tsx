@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { preloadDeviceIcons } from "@/lib/map-optimizations"
 import { FleetSidebar } from "@/components/fleet-sidebar"
 import {
+  BatteryIndicator,
   ChevronLeft,
   ChevronRight,
   Fence,
@@ -43,6 +44,7 @@ import { StopTable } from "@/components/stop-table"
 import { TripTable } from "@/components/trip-table"
 import { AuthImage } from "@/components/auth-image"
 import { useFleet, type View } from "@/hooks/use-fleet"
+import type { TraccarDevice, TraccarPosition } from "@/lib/traccar"
 import { useTheme } from "@/components/theme-provider"
 import {
   durationLabel,
@@ -74,12 +76,109 @@ function parseGeofenceCenter(area: string): [number, number] | null {
   return null
 }
 
+function deviceImageUrl(uniqueId: string, filename: string) {
+  return `/api/media/${uniqueId}/${filename}`
+}
+
+type DeviceMarkerProps = {
+  device: TraccarDevice
+  position: TraccarPosition
+  active: boolean
+  onSelect: (id: number) => void
+}
+
+const DeviceMarker = memo(function DeviceMarker({
+  device,
+  position,
+  active,
+  onSelect,
+}: DeviceMarkerProps) {
+  const battery = getBatteryLevel(position)
+  const DeviceIcon = getDeviceIcon(device.category)
+  const handleClick = useCallback(() => onSelect(device.id), [onSelect, device.id])
+
+  return (
+    <MapMarker
+      longitude={position.longitude}
+      latitude={position.latitude}
+      onClick={handleClick}
+    >
+      <MarkerContent>
+        <div
+          className={`relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 shadow-xl ${
+            active
+              ? "border-primary/20 bg-primary text-primary-foreground"
+              : "border-background/80 bg-background text-foreground"
+          }`}
+        >
+          <DeviceIcon className="size-4" />
+          {typeof device.attributes?.deviceImage === "string" && (
+            <AuthImage
+              src={deviceImageUrl(
+                device.uniqueId,
+                device.attributes.deviceImage
+              )}
+              alt={device.name}
+              className="absolute inset-0 z-10 size-full bg-background object-cover"
+            />
+          )}
+        </div>
+        <MarkerLabel position="bottom">
+          {device.name.split(",")[0]}
+        </MarkerLabel>
+      </MarkerContent>
+      <MarkerPopup className="w-64 p-0">
+        <div className="space-y-2 p-3">
+          <div className="flex gap-3">
+            <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted">
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <DeviceIcon className="size-5" />
+              </div>
+              {typeof device.attributes?.deviceImage === "string" && (
+                <AuthImage
+                  src={deviceImageUrl(
+                    device.uniqueId,
+                    device.attributes.deviceImage
+                  )}
+                  alt={device.name}
+                  className="absolute inset-0 z-10 size-full bg-background object-cover"
+                />
+              )}
+            </div>
+            <div>
+              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                {device.category ?? "Device"}
+              </span>
+              <h3 className="leading-tight font-semibold text-foreground">
+                {device.name}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {toKph(position.speed)} km/h
+            </span>
+            <span>{device.uniqueId}</span>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              {relativeTime(position.fixTime ?? position.deviceTime)}
+            </span>
+            {battery !== null && (
+              <div className="flex items-center gap-1">
+                <BatteryIndicator level={battery} className="size-4" />
+                <span>{battery}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </MarkerPopup>
+    </MapMarker>
+  )
+})
+
 export function App() {
   const fleet = useFleet()
-
-  function deviceImageUrl(uniqueId: string, filename: string) {
-    return `/api/media/${uniqueId}/${filename}`
-  }
 
   const [view, setView] = useState<View>("live")
   const [showSettings, setShowSettings] = useState(false)
@@ -158,12 +257,13 @@ export function App() {
 
     const isNewDevice = lastFlewToDeviceId.current !== fleet.selectedDevice.id
     lastFlewToDeviceId.current = fleet.selectedDevice.id
+    const currentZoom = mapRef.current.getZoom()
     mapRef.current.flyTo({
       center: [
         fleet.selectedPosition.longitude,
         fleet.selectedPosition.latitude,
       ],
-      ...(isNewDevice ? { zoom: 11.8 } : {}),
+      ...(isNewDevice && currentZoom < 11.8 ? { zoom: 11.8 } : {}),
       duration: 900,
     })
   }, [fleet.selectedDevice, fleet.selectedPosition, view])
@@ -258,12 +358,7 @@ export function App() {
           </TabsList>
         </Tabs>
 
-        <MetricBar
-          devices={fleet.devices}
-          selectedPosition={fleet.selectedPosition}
-          selectedSummary={fleet.selectedSummary}
-          selectedTrip={fleet.selectedTrip}
-        />
+        <MetricBar devices={fleet.devices} />
 
         <div className="ml-auto flex items-center gap-2">
           <Badge
@@ -354,7 +449,23 @@ export function App() {
             }
           }}
         >
-          <div className="absolute top-4 right-4 z-20">
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            {import.meta.env.VITE_DEBUG === "true" && (
+              <div className="rounded-md bg-black/70 px-2 py-1 font-mono text-xs text-white">
+                z{mapZoom.toFixed(1)}{" "}
+                <span
+                  className={
+                    Math.floor(mapZoom) > CLUSTER_MAX_ZOOM
+                      ? "text-green-400"
+                      : "text-yellow-400"
+                  }
+                >
+                  {Math.floor(mapZoom) > CLUSTER_MAX_ZOOM
+                    ? "markers"
+                    : "clusters"}
+                </span>
+              </div>
+            )}
             <Button
               type="button"
               variant="secondary"
@@ -406,89 +517,18 @@ export function App() {
 
             {/* Live markers (zoomed in) */}
             {view === "live" &&
-              mapZoom > CLUSTER_MAX_ZOOM &&
+              Math.floor(mapZoom) > CLUSTER_MAX_ZOOM &&
               fleet.devices.map((device) => {
                 const position = fleet.positionsByDevice.get(device.id)
                 if (!position) return null
-                const active = device.id === fleet.selectedDevice?.id
-                const battery = getBatteryLevel(position)
-                const DeviceIcon = getDeviceIcon(device.category)
                 return (
-                  <MapMarker
+                  <DeviceMarker
                     key={device.id}
-                    longitude={position.longitude}
-                    latitude={position.latitude}
-                    onClick={() => fleet.setSelectedDeviceId(device.id)}
-                  >
-                    <MarkerContent>
-                      <div
-                        className={`relative flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 transition-transform hover:scale-110 ${
-                          active
-                            ? "border-primary/20 bg-primary text-primary-foreground"
-                            : "border-background/80 bg-background text-foreground"
-                        } shadow-xl`}
-                      >
-                        <DeviceIcon className="size-4" />
-                        {typeof device.attributes?.deviceImage === "string" && (
-                          <AuthImage
-                            src={deviceImageUrl(
-                              device.uniqueId,
-                              device.attributes.deviceImage
-                            )}
-                            alt={device.name}
-                            className="absolute inset-0 z-10 size-full bg-background object-cover"
-                          />
-                        )}
-                      </div>
-                      <MarkerLabel position="bottom">
-                        {device.name.split(",")[0]}
-                      </MarkerLabel>
-                    </MarkerContent>
-                    <MarkerPopup className="w-64 p-0">
-                      <div className="space-y-2 p-3">
-                        <div className="flex gap-3">
-                          <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted">
-                            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                              <DeviceIcon className="size-5" />
-                            </div>
-                            {typeof device.attributes?.deviceImage ===
-                              "string" && (
-                              <AuthImage
-                                src={deviceImageUrl(
-                                  device.uniqueId,
-                                  device.attributes.deviceImage
-                                )}
-                                alt={device.name}
-                                className="absolute inset-0 z-10 size-full bg-background object-cover"
-                              />
-                            )}
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                              {device.category ?? "Device"}
-                            </span>
-                            <h3 className="leading-tight font-semibold text-foreground">
-                              {device.name}
-                            </h3>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            {toKph(position.speed)} km/h
-                          </span>
-                          <span>{device.uniqueId}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>
-                            {relativeTime(
-                              position.fixTime ?? position.deviceTime
-                            )}
-                          </span>
-                          {battery !== null && <span>{battery}% battery</span>}
-                        </div>
-                      </div>
-                    </MarkerPopup>
-                  </MapMarker>
+                    device={device}
+                    position={position}
+                    active={device.id === fleet.selectedDevice?.id}
+                    onSelect={fleet.setSelectedDeviceId}
+                  />
                 )
               })}
 

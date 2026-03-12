@@ -1,43 +1,18 @@
-import { Activity, Gauge, Zap } from "@/components/icons"
-import type {
-  TraccarDevice,
-  TraccarPosition,
-  TraccarReportSummary,
-  TraccarReportTrip,
-} from "@/lib/traccar"
-import { distanceInKm, toKph } from "@/lib/utils"
+import { Activity } from "@/components/icons"
+import type { TraccarDevice } from "@/lib/traccar"
 
 type MetricBarProps = {
   devices: TraccarDevice[]
-  selectedPosition: TraccarPosition | null
-  selectedSummary: TraccarReportSummary | null
-  selectedTrip: TraccarReportTrip | null
 }
 
-export function MetricBar({
-  devices,
-  selectedPosition,
-  selectedSummary,
-  selectedTrip,
-}: MetricBarProps) {
+export function MetricBar({ devices }: MetricBarProps) {
+  const activeCount = devices.filter((d) => d.status === "online").length
   return (
     <div className="flex items-center gap-5">
       <MetricItem
         icon={Activity}
         label="Active units"
-        value={String(devices.filter((d) => d.status === "online").length)}
-      />
-      <MetricItem
-        icon={Gauge}
-        label="Selected speed"
-        value={`${toKph(selectedPosition?.speed)} km/h`}
-      />
-      <MetricItem
-        icon={Zap}
-        label="Trip distance"
-        value={distanceInKm(
-          selectedSummary?.distance ?? selectedTrip?.distance
-        )}
+        value={`${activeCount} / ${devices.length}`}
       />
     </div>
   )

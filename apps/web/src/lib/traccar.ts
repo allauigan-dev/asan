@@ -205,6 +205,14 @@ export type TraccarDriver = {
   attributes?: Record<string, unknown>
 }
 
+export type TraccarAttribute = {
+  id: number
+  description: string
+  attribute: string
+  expression: string
+  type: string
+}
+
 export type TraccarMaintenance = {
   id: number
   name: string
@@ -924,8 +932,11 @@ function testNotification(config: TraccarConfig) {
 
 // ── Drivers ───────────────────────────────────────────────────────────────────
 
-function getDrivers(config: TraccarConfig) {
-  return request<TraccarDriver[]>(config, "/drivers")
+function getDrivers(config: TraccarConfig, groupId?: number) {
+  const query = groupId
+    ? new URLSearchParams({ groupId: String(groupId) })
+    : undefined
+  return request<TraccarDriver[]>(config, "/drivers", { query })
 }
 
 function createDriver(
@@ -953,6 +964,41 @@ function updateDriver(
 
 function deleteDriver(config: TraccarConfig, id: number) {
   return request<void>(config, `/drivers/${id}`, { method: "DELETE" })
+}
+
+// ── Computed Attributes ────────────────────────────────────────────────────────
+
+function getComputedAttributes(config: TraccarConfig) {
+  return request<TraccarAttribute[]>(config, "/attributes/computed")
+}
+
+function createComputedAttribute(
+  config: TraccarConfig,
+  attribute: Omit<TraccarAttribute, "id">
+) {
+  return request<TraccarAttribute>(config, "/attributes/computed", {
+    method: "POST",
+    body: JSON.stringify(attribute),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function updateComputedAttribute(
+  config: TraccarConfig,
+  id: number,
+  attribute: TraccarAttribute
+) {
+  return request<TraccarAttribute>(config, `/attributes/computed/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(attribute),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+function deleteComputedAttribute(config: TraccarConfig, id: number) {
+  return request<void>(config, `/attributes/computed/${id}`, {
+    method: "DELETE",
+  })
 }
 
 // ── Maintenance ───────────────────────────────────────────────────────────────
@@ -1125,7 +1171,7 @@ function shareDevice(
 
 // ── Export ─────────────────────────────────────────────────────────────────────
 
-function getExportUrl(
+async function downloadExport(
   config: TraccarConfig,
   format: "csv" | "gpx" | "kml",
   deviceId: number,
@@ -1138,10 +1184,25 @@ function getExportUrl(
     from,
     to,
   })
-  if (config.token) {
-    params.set("token", config.token)
+  const url = `${base}/positions/${format}?${params}`
+
+  const response = await fetch(url, {
+    headers: createHeaders(config),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Export failed: ${response.status}`)
   }
-  return `${base}/positions/${format}?${params}`
+
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = objectUrl
+  a.download = `positions-${deviceId}.${format}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(objectUrl)
 }
 
 // ── Health ─────────────────────────────────────────────────────────────────────
@@ -1157,6 +1218,7 @@ function getEventById(config: TraccarConfig, id: number) {
 }
 
 export {
+  createComputedAttribute,
   createDevice,
   createDriver,
   createGeofence,
@@ -1165,6 +1227,7 @@ export {
   createNotification,
   createSavedCommand,
   createUser,
+  deleteComputedAttribute,
   deleteDevice,
   deleteDriver,
   deleteGeofence,
@@ -1174,13 +1237,14 @@ export {
   deleteSavedCommand,
   deleteUser,
   geocode,
+  getComputedAttributes,
   getCalendars,
   getCommandTypes,
   getCommands,
   getDevices,
   getEventById,
   getEvents,
-  getExportUrl,
+  downloadExport,
   getGeofenceReport,
   getGeofences,
   getGroups,
@@ -1216,6 +1280,7 @@ export {
   toRealtimeUrl,
   triggerServerGc,
   unlinkPermission,
+  updateComputedAttribute,
   updateDevice,
   updateDeviceAccumulators,
   updateDriver,

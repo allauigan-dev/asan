@@ -440,4 +440,67 @@ export const Clock = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const Function = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <rect x="4" y="13" width="4" height="7" rx="1" />
+    <path d="M4 13V7a4 4 0 0 1 8 0v10a4 4 0 0 0 8 0v-6" />
+    <rect x="16" y="4" width="4" height="7" rx="1" />
+  </IconBase>
+)
+
+export function BatteryIndicator({
+  level,
+  className,
+}: {
+  level: number
+  className?: string
+}) {
+  const clamped = Math.max(0, Math.min(100, level))
+  const fillWidth = Math.round((clamped / 100) * 14)
+  const colorClass =
+    clamped <= 20
+      ? "text-red-500"
+      : clamped <= 40
+        ? "text-orange-500"
+        : clamped <= 60
+          ? "text-yellow-500"
+          : "text-green-500"
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`${colorClass}${className ? ` ${className}` : ""}`}
+      aria-hidden="true"
+    >
+      {/* Battery body */}
+      <rect
+        x="1"
+        y="6"
+        width="18"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      {/* Terminal nib */}
+      <rect x="19" y="10" width="3" height="4" rx="1" fill="currentColor" stroke="none" />
+      {/* Fill level */}
+      {fillWidth > 0 && (
+        <rect
+          x="3"
+          y="8.5"
+          width={fillWidth}
+          height="7"
+          rx="1"
+          fill="currentColor"
+          stroke="none"
+        />
+      )}
+    </svg>
+  )
+}
+
 export type { IconProps }

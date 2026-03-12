@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Fence,
   FolderOpen,
+  Function,
   Person,
   Plus,
   Server,
@@ -41,6 +42,7 @@ import {
   Users,
   Wrench,
 } from "@/components/icons"
+import { AttributePanel } from "@/components/settings/attribute-panel"
 import { CommandPanel } from "@/components/settings/command-panel"
 import { DriverPanel } from "@/components/settings/driver-panel"
 import { GeofencePanel } from "@/components/settings/geofence-panel"
@@ -82,6 +84,7 @@ type SettingsTab =
   | "users"
   | "groups"
   | "statistics"
+  | "attributes"
 
 type SettingsPageProps = {
   connectionState: ConnectionState
@@ -211,6 +214,13 @@ export function SettingsPage({
             disabled={!isConnected}
           />
           <NavItem
+            icon={<Function className="size-4" />}
+            label="Attributes"
+            active={activeTab === "attributes"}
+            onClick={() => setActiveTab("attributes")}
+            disabled={!isConnected}
+          />
+          <NavItem
             icon={<Bell className="size-4" />}
             label="Notifications"
             active={activeTab === "notifications"}
@@ -247,6 +257,7 @@ export function SettingsPage({
           {activeTab === "drivers" && isConnected && <DriverPanel />}
           {activeTab === "commands" && isConnected && <CommandPanel />}
           {activeTab === "maintenance" && isConnected && <MaintenancePanel />}
+          {activeTab === "attributes" && isConnected && <AttributePanel />}
           {activeTab === "notifications" && isConnected && (
             <NotificationPanel />
           )}
@@ -1121,22 +1132,18 @@ function DevicesTab({
 
       {/* Add Device Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="flex max-w-2xl flex-col gap-0">
+        <DialogContent className="flex max-w-lg flex-col gap-0">
           <DialogHeader>
             <DialogTitle>Add New Device</DialogTitle>
             <DialogDescription>
               Enter device information to register it with your tracking server.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[calc(90vh-8rem)]">
-            <div className="pt-4 pr-4">
-              <DeviceForm
-                connectionForm={connectionForm}
-                onSuccess={handleDeviceAdded}
-                onCancel={() => setIsAddDialogOpen(false)}
-              />
-            </div>
-          </ScrollArea>
+          <DeviceForm
+            connectionForm={connectionForm}
+            onSuccess={handleDeviceAdded}
+            onCancel={() => setIsAddDialogOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 
@@ -1145,25 +1152,21 @@ function DevicesTab({
         open={!!editingDevice}
         onOpenChange={(open) => !open && setEditingDevice(null)}
       >
-        <DialogContent className="flex max-w-2xl flex-col gap-0 bg-background">
+        <DialogContent className="flex max-w-lg flex-col gap-0 bg-background">
           <DialogHeader>
             <DialogTitle>Edit Device</DialogTitle>
             <DialogDescription>
               Update device information and settings.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[calc(90vh-8rem)]">
-            <div className="pt-4 pr-4">
-              {editingDevice && (
-                <DeviceForm
-                  connectionForm={connectionForm}
-                  device={editingDevice}
-                  onSuccess={handleDeviceUpdated}
-                  onCancel={() => setEditingDevice(null)}
-                />
-              )}
-            </div>
-          </ScrollArea>
+          {editingDevice && (
+            <DeviceForm
+              connectionForm={connectionForm}
+              device={editingDevice}
+              onSuccess={handleDeviceUpdated}
+              onCancel={() => setEditingDevice(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -1300,7 +1303,32 @@ function DeviceForm({
               attributes: form.attributes,
             }),
         }
-        await createDevice(config, deviceData)
+        const newDevice = await createDevice(config, deviceData)
+
+        if (imageFile) {
+          try {
+            setImageUploadState({ status: "uploading" })
+            const filename = await uploadDeviceImage(
+              config,
+              newDevice.id,
+              imageFile
+            )
+            const attr = filename || imageFile.name
+            await updateDevice(config, newDevice.id, {
+              ...newDevice,
+              attributes: {
+                ...(newDevice.attributes ?? {}),
+                deviceImage: attr,
+              },
+            })
+            setImageUploadState({ status: "success" })
+          } catch {
+            setImageUploadState({
+              status: "error",
+              message: "Device created but image upload failed.",
+            })
+          }
+        }
       }
       onSuccess()
     } catch (err: unknown) {
@@ -1365,226 +1393,245 @@ function DeviceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Required fields */}
-      <div className="space-y-4">
-        <FieldRow
-          label="Name"
-          description="Device name or identifier (required)"
-        >
-          <Input
-            value={form.name ?? ""}
-            onChange={(e) => setForm({ name: e.target.value })}
-            placeholder="My Vehicle"
-            required
-            disabled={saving || deleting}
-          />
-        </FieldRow>
-        <FieldRow
-          label="Unique ID"
-          description="Device hardware identifier (IMEI, serial number, etc.) (required)"
-        >
-          <Input
-            value={form.uniqueId ?? ""}
-            onChange={(e) => setForm({ uniqueId: e.target.value })}
-            placeholder="123456789012345"
-            required
-            disabled={saving || deleting || isEditing}
-          />
-        </FieldRow>
-      </div>
-
-      {/* Optional fields */}
-      <div className="space-y-4 border-t border-border/30 pt-4">
-        <p className="text-xs font-medium text-muted-foreground">
-          Optional Information
-        </p>
-
-        <FieldRow label="Category" description="Device type for map icon">
-          <Select
-            value={form.category ?? "none"}
-            onValueChange={(value) =>
-              setForm({
-                category: value === "none" ? undefined : value,
-              })
-            }
-            disabled={saving || deleting}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No category</SelectItem>
-              {DEVICE_CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FieldRow>
-
-        {groups.length > 0 && (
-          <FieldRow label="Group" description="Associate device with a group">
-            <Select
-              value={form.groupId?.toString() ?? "none"}
-              onValueChange={(value) =>
-                setForm({
-                  groupId: value === "none" ? undefined : Number(value),
-                })
-              }
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-3 px-1 py-4 pr-4">
+          {/* Required fields */}
+          <FormField label="Name" description="Device name or identifier">
+            <Input
+              value={form.name ?? ""}
+              onChange={(e) => setForm({ name: e.target.value })}
+              placeholder="My Vehicle"
+              required
               disabled={saving || deleting}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="No group" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No group</SelectItem>
-                {groups.map((group) => (
-                  <SelectItem key={group.id} value={group.id.toString()}>
-                    {group.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldRow>
-        )}
+            />
+          </FormField>
 
-        <FieldRow
-          label="Phone Number"
-          description="Contact phone number for SMS commands"
-        >
-          <Input
-            value={form.phone ?? ""}
-            onChange={(e) => setForm({ phone: e.target.value })}
-            placeholder="+1234567890"
-            type="tel"
-            disabled={saving || deleting}
-          />
-        </FieldRow>
-
-        <FieldRow label="Model" description="Device model name">
-          <Input
-            value={form.model ?? ""}
-            onChange={(e) => setForm({ model: e.target.value })}
-            placeholder="GPS Tracker Pro"
-            disabled={saving || deleting}
-          />
-        </FieldRow>
-
-        <FieldRow label="Contact" description="Contact person or information">
-          <Input
-            value={form.contact ?? ""}
-            onChange={(e) => setForm({ contact: e.target.value })}
-            placeholder="John Doe"
-            disabled={saving || deleting}
-          />
-        </FieldRow>
-
-        {isEditing && (
-          <FieldRow
-            label="Device Image"
-            description="Upload an image or paste an existing filename from the media library"
+          <FormField
+            label="Unique ID"
+            description="IMEI, serial number, or hardware identifier"
           >
-            <div className="flex flex-wrap items-start gap-3">
-              <div className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border/40 bg-muted/40">
-                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                  <DeviceIcon className="size-6" />
-                </div>
-                {imageFilename && (
-                  <AuthImage
-                    src={deviceImageUrl(form.uniqueId, imageFilename)}
-                    alt={form.name}
-                    className="absolute inset-0 z-10 size-full bg-background object-cover"
-                  />
+            <Input
+              value={form.uniqueId ?? ""}
+              onChange={(e) => setForm({ uniqueId: e.target.value })}
+              placeholder="123456789012345"
+              required
+              disabled={saving || deleting || isEditing}
+            />
+          </FormField>
+
+          <div className="border-t border-border/30 pt-3">
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
+              Optional
+            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Category" description="Device type for icon">
+                  <Select
+                    value={form.category ?? "none"}
+                    onValueChange={(value) =>
+                      setForm({
+                        category: value === "none" ? undefined : value,
+                      })
+                    }
+                    disabled={saving || deleting}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="No category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No category</SelectItem>
+                      {DEVICE_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+
+                {groups.length > 0 && (
+                  <FormField label="Group" description="Assign to a group">
+                    <Select
+                      value={form.groupId?.toString() ?? "none"}
+                      onValueChange={(value) =>
+                        setForm({
+                          groupId:
+                            value === "none" ? undefined : Number(value),
+                        })
+                      }
+                      disabled={saving || deleting}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="No group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No group</SelectItem>
+                        {groups.map((group) => (
+                          <SelectItem
+                            key={group.id}
+                            value={group.id.toString()}
+                          >
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                 )}
               </div>
-              <div className="min-w-[220px] flex-1 space-y-2">
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Phone" description="For SMS commands">
+                  <Input
+                    value={form.phone ?? ""}
+                    onChange={(e) => setForm({ phone: e.target.value })}
+                    placeholder="+1234567890"
+                    type="tel"
+                    disabled={saving || deleting}
+                  />
+                </FormField>
+
+                <FormField label="Model" description="Device model name">
+                  <Input
+                    value={form.model ?? ""}
+                    onChange={(e) => setForm({ model: e.target.value })}
+                    placeholder="GPS Tracker Pro"
+                    disabled={saving || deleting}
+                  />
+                </FormField>
+              </div>
+
+              <FormField label="Contact" description="Contact person or info">
                 <Input
-                  value={imageFilename}
-                  onChange={(e) => updateImageAttribute(e.target.value)}
-                  placeholder="device-photo.jpg"
+                  value={form.contact ?? ""}
+                  onChange={(e) => setForm({ contact: e.target.value })}
+                  placeholder="John Doe"
                   disabled={saving || deleting}
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                    disabled={
-                      saving ||
-                      deleting ||
-                      imageUploadState.status === "uploading"
-                    }
-                    className="min-w-[220px]"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleImageUpload}
-                    disabled={
-                      saving ||
-                      deleting ||
-                      !imageFile ||
-                      imageUploadState.status === "uploading"
-                    }
-                  >
-                    {imageUploadState.status === "uploading"
-                      ? "Uploading…"
-                      : "Upload"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => updateImageAttribute("")}
-                    disabled={saving || deleting || !imageFilename}
-                  >
-                    Remove
-                  </Button>
+              </FormField>
+
+              <FormField
+                label="Device Image"
+                description={
+                  isEditing
+                    ? "Upload or paste existing filename"
+                    : "Optional — uploaded automatically when saved"
+                }
+              >
+                <div className="space-y-2">
+                  {isEditing && (
+                    <div className="flex items-center gap-3">
+                      <div className="relative size-12 shrink-0 overflow-hidden rounded-md border border-border/40 bg-muted/40">
+                        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                          <DeviceIcon className="size-5" />
+                        </div>
+                        {imageFilename && (
+                          <AuthImage
+                            src={deviceImageUrl(form.uniqueId, imageFilename)}
+                            alt={form.name}
+                            className="absolute inset-0 z-10 size-full bg-background object-cover"
+                          />
+                        )}
+                      </div>
+                      <Input
+                        value={imageFilename}
+                        onChange={(e) => updateImageAttribute(e.target.value)}
+                        placeholder="device-photo.jpg"
+                        disabled={saving || deleting}
+                        className="flex-1"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        setImageFile(e.target.files?.[0] ?? null)
+                      }
+                      disabled={
+                        saving ||
+                        deleting ||
+                        imageUploadState.status === "uploading"
+                      }
+                      className="flex-1 text-xs"
+                    />
+                    {isEditing && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleImageUpload}
+                          disabled={
+                            saving ||
+                            deleting ||
+                            !imageFile ||
+                            imageUploadState.status === "uploading"
+                          }
+                        >
+                          {imageUploadState.status === "uploading"
+                            ? "Uploading…"
+                            : "Upload"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateImageAttribute("")}
+                          disabled={saving || deleting || !imageFilename}
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {imageUploadState.status === "error" && (
+                    <p className="text-[11px] text-destructive">
+                      {imageUploadState.message ?? "Upload failed"}
+                    </p>
+                  )}
+                  {imageUploadState.status === "success" && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {isEditing ? "Image uploaded. Save to persist." : "Image uploaded."}
+                    </p>
+                  )}
                 </div>
-                {imageUploadState.status === "error" && (
-                  <p className="text-[11px] text-destructive">
-                    {imageUploadState.message ?? "Upload failed"}
-                  </p>
-                )}
-                {imageUploadState.status === "success" && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Image uploaded. Save changes to persist.
-                  </p>
-                )}
-              </div>
+              </FormField>
+
+              <ToggleRow
+                label="Disabled"
+                description="Mark device as disabled"
+                checked={!!form.disabled}
+                onChange={(v) => setForm({ disabled: v })}
+                disabled={saving || deleting}
+              />
             </div>
-          </FieldRow>
-        )}
+          </div>
+        </div>
+      </ScrollArea>
 
-        <ToggleRow
-          label="Disabled"
-          description="Mark device as disabled (typically for administrators)"
-          checked={!!form.disabled}
-          onChange={(v) => setForm({ disabled: v })}
-          disabled={saving || deleting}
-        />
-      </div>
-
-      <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-2">
+      {/* Actions — always visible, outside scroll */}
+      <div className="flex items-center justify-between gap-3 border-t border-border/30 px-1 pt-4">
         {isEditing ? (
           <Button
             type="button"
             variant="destructive"
+            size="sm"
             onClick={handleDelete}
             disabled={saving || deleting}
           >
-            {deleting ? "Deleting…" : "Delete Device"}
+            {deleting ? "Deleting…" : "Delete"}
           </Button>
         ) : (
           <div />
         )}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
+            size="sm"
             onClick={onCancel}
             disabled={saving || deleting}
           >
@@ -1592,9 +1639,9 @@ function DeviceForm({
           </Button>
           <Button
             type="submit"
+            size="sm"
             disabled={saving || deleting || !form.name || !form.uniqueId}
           >
-            <Plus className="size-4" />
             {saving
               ? isEditing
                 ? "Saving…"
@@ -1610,6 +1657,26 @@ function DeviceForm({
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
+
+function FormField({
+  label,
+  description,
+  children,
+}: {
+  label: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-foreground">{label}</p>
+      {description && (
+        <p className="text-[11px] text-muted-foreground">{description}</p>
+      )}
+      {children}
+    </div>
+  )
+}
 
 function FieldRow({
   label,

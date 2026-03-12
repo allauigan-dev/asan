@@ -25,15 +25,22 @@ import {
 export function DriverPanel() {
   const [drivers, setDrivers] = useState<TraccarDriver[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [editItem, setEditItem] = useState<TraccarDriver | null>(null)
   const [showDialog, setShowDialog] = useState(false)
 
   function load() {
     const config = toConfig(readStoredConfig())
     setLoading(true)
+    setError(null)
     getDrivers(config)
-      .then(setDrivers)
-      .catch(() => setDrivers([]))
+      .then((data) => {
+        setDrivers(data)
+      })
+      .catch((err: unknown) => {
+        setDrivers([])
+        setError(err instanceof Error ? err.message : "Failed to load drivers")
+      })
       .finally(() => setLoading(false))
   }
 
@@ -65,6 +72,8 @@ export function DriverPanel() {
           <p className="py-8 text-center text-xs text-muted-foreground">
             Loading…
           </p>
+        ) : error ? (
+          <p className="py-8 text-center text-xs text-destructive">{error}</p>
         ) : drivers.length === 0 ? (
           <p className="py-8 text-center text-xs text-muted-foreground">
             No drivers configured

@@ -18,14 +18,31 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs"
 
-import { FolderOpen, Plus, Trash } from "@/components/icons"
+import {
+  Edit,
+  FolderOpen,
+  Person,
+  Plus,
+  Trash,
+  Truck,
+} from "@/components/icons"
 import { readStoredConfig, toConfig } from "@/lib/config"
 import {
   createGroup,
   deleteGroup,
+  getDevices,
+  getDrivers,
   getGroups,
   updateGroup,
+  type TraccarDevice,
+  type TraccarDriver,
   type TraccarGroup,
 } from "@/lib/traccar"
 
@@ -33,7 +50,9 @@ export function GroupPanel() {
   const [groups, setGroups] = useState<TraccarGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<TraccarGroup | null>(null)
-  const [showDialog, setShowDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [membersGroup, setMembersGroup] = useState<TraccarGroup | null>(null)
+  const [showMembersDialog, setShowMembersDialog] = useState(false)
 
   function load() {
     const config = toConfig(readStoredConfig())
@@ -60,7 +79,7 @@ export function GroupPanel() {
             size="sm"
             onClick={() => {
               setEditItem(null)
-              setShowDialog(true)
+              setShowEditDialog(true)
             }}
           >
             <Plus className="size-4" />
@@ -83,8 +102,8 @@ export function GroupPanel() {
                 key={g.id}
                 className="cursor-pointer"
                 onClick={() => {
-                  setEditItem(g)
-                  setShowDialog(true)
+                  setMembersGroup(g)
+                  setShowMembersDialog(true)
                 }}
               >
                 <CardContent className="flex items-center justify-between p-4">
@@ -101,19 +120,33 @@ export function GroupPanel() {
                       ) : null}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!confirm(`Delete group "${g.name}"?`)) return
-                      const config = toConfig(readStoredConfig())
-                      deleteGroup(config, g.id).then(load)
-                    }}
-                  >
-                    <Trash className="size-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditItem(g)
+                        setShowEditDialog(true)
+                      }}
+                    >
+                      <Edit className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (!confirm(`Delete group "${g.name}"?`)) return
+                        const config = toConfig(readStoredConfig())
+                        deleteGroup(config, g.id).then(load)
+                      }}
+                    >
+                      <Trash className="size-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -121,16 +154,158 @@ export function GroupPanel() {
         )}
 
         <GroupFormDialog
-          open={showDialog}
-          onOpenChange={setShowDialog}
+          open={showEditDialog}
+          onOpenChange={setShowEditDialog}
           item={editItem}
           groups={groups}
           onSaved={load}
+        />
+
+        <GroupMembersDialog
+          open={showMembersDialog}
+          onOpenChange={setShowMembersDialog}
+          group={membersGroup}
         />
       </div>
     </ScrollArea>
   )
 }
+
+// ── Group members dialog ───────────────────────────────────────────────────────
+
+function GroupMembersDialog({
+  open,
+  onOpenChange,
+  group,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  group: TraccarGroup | null
+}) {
+  const [devices, setDevices] = useState<TraccarDevice[]>([])
+  const [drivers, setDrivers] = useState<TraccarDriver[]>([])
+  const [loadingDevices, setLoadingDevices] = useState(false)
+  const [loadingDrivers, setLoadingDrivers] = useState(false)
+
+  useEffect(() => {
+    if (!open || !group) return
+    const config = toConfig(readStoredConfig())
+
+    setLoadingDevices(true)
+    getDevices(config)
+      .then((all) => setDevices(all.filter((d) => d.groupId === group.id)))
+      .catch(() => setDevices([]))
+      .finally(() => setLoadingDevices(false))
+
+    setLoadingDrivers(true)
+    getDrivers(config, group.id)
+      .then(setDrivers)
+      .catch(() => setDrivers([]))
+      .finally(() => setLoadingDrivers(false))
+  }, [open, group])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{group?.name ?? "Group"}</DialogTitle>
+          <DialogDescription>
+            Devices and drivers linked to this group
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="devices">
+          <TabsList>
+            <TabsTrigger value="devices">
+              <Truck className="mr-1.5 size-3.5" />
+              Devices
+              {!loadingDevices && (
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs">
+                  {devices.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="drivers">
+              <Person className="mr-1.5 size-3.5" />
+              Drivers
+              {!loadingDrivers && (
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs">
+                  {drivers.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="devices" className="mt-3">
+            <ScrollArea className="max-h-64">
+              <div className="space-y-1.5 pr-1">
+                {loadingDevices ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    Loading…
+                  </p>
+                ) : devices.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    No devices in this group
+                  </p>
+                ) : (
+                  devices.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center gap-3 rounded-md border px-3 py-2.5"
+                    >
+                      <Truck className="size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{d.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {d.uniqueId}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="drivers" className="mt-3">
+            <ScrollArea className="max-h-64">
+              <div className="space-y-1.5 pr-1">
+                {loadingDrivers ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    Loading…
+                  </p>
+                ) : drivers.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    No drivers linked to this group
+                  </p>
+                ) : (
+                  drivers.map((dr) => (
+                    <div
+                      key={dr.id}
+                      className="flex items-center gap-3 rounded-md border px-3 py-2.5"
+                    >
+                      <Person className="size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {dr.name}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {dr.uniqueId}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Group form dialog ──────────────────────────────────────────────────────────
 
 function GroupFormDialog({
   open,
@@ -177,7 +352,6 @@ function GroupFormDialog({
     }
   }
 
-  // Exclude current item from parent options to prevent self-reference
   const parentOptions = groups.filter((g) => g.id !== item?.id)
 
   return (
@@ -195,12 +369,15 @@ function GroupFormDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <Select value={groupId} onValueChange={setGroupId}>
+          <Select
+            value={groupId || "none"}
+            onValueChange={(v) => setGroupId(v === "none" ? "" : v)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Parent group (optional)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {parentOptions.map((g) => (
                 <SelectItem key={g.id} value={String(g.id)}>
                   {g.name}
