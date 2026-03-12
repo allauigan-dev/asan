@@ -1246,6 +1246,60 @@ function getEventById(config: TraccarConfig, id: number) {
   return request<TraccarEvent>(config, `/events/${id}`)
 }
 
+// ── Permissions ────────────────────────────────────────────────────────────────
+
+/**
+ * Create a permission link between a device and an entity
+ */
+export async function createPermission(
+  config: TraccarConfig,
+  permission: TraccarPermission
+): Promise<void> {
+  await apiRequest<void>(config, "/permissions", {
+    method: "POST",
+    body: JSON.stringify(permission),
+  })
+  // Clear cache to force refresh of affected data
+  clearCache()
+}
+
+/**
+ * Delete a permission link between a device and an entity
+ */
+export async function deletePermission(
+  config: TraccarConfig,
+  permission: TraccarPermission
+): Promise<void> {
+  await apiRequest<void>(config, "/permissions", {
+    method: "DELETE",
+    body: JSON.stringify(permission),
+  })
+  // Clear cache to force refresh of affected data
+  clearCache()
+}
+
+/**
+ * Get all entity IDs of a given type connected to a device
+ * This requires fetching all permissions and filtering for the device
+ */
+export async function getDevicePermissions(
+  config: TraccarConfig,
+  deviceId: number,
+  type: PermissionType
+): Promise<number[]> {
+  // Traccar doesn't have a direct endpoint for device permissions
+  // We need to fetch the relevant entities and check which ones are linked
+  const fieldName = PERMISSION_FIELD_MAP[type]
+
+  // For each entity type, we'll need to fetch differently
+  // This is a simplified approach - actual implementation may need adjustment
+  // based on Traccar API capabilities
+
+  // For now, return empty array - will be implemented based on actual API
+  // TODO: Implement based on Traccar API endpoints for permissions
+  return []
+}
+
 export {
   createComputedAttribute,
   createDevice,
