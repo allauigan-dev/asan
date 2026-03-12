@@ -1459,6 +1459,344 @@ function MapClusterLayer<
   return null
 }
 
+// ── MapPolygonLayer ────────────────────────────────────────────────────────────
+
+type MapPolygonLayerProps = {
+  /** Optional unique identifier for the polygon layer */
+  id?: string
+  /** Array of [longitude, latitude] coordinate pairs (ring, not closed) */
+  coordinates: [number, number][]
+  /** Fill color (default: "#8B5CF6") */
+  fillColor?: string
+  /** Fill opacity 0–1 (default: 0.15) */
+  fillOpacity?: number
+  /** Outline color (default: "#8B5CF6") */
+  outlineColor?: string
+  /** Outline width in pixels (default: 2) */
+  outlineWidth?: number
+  /** Whether the polygon triggers pointer cursor and click/hover events */
+  interactive?: boolean
+  /** Callback when polygon is clicked */
+  onClick?: () => void
+  /** Callback when mouse enters polygon */
+  onMouseEnter?: () => void
+  /** Callback when mouse leaves polygon */
+  onMouseLeave?: () => void
+}
+
+function MapPolygonLayer({
+  id: propId,
+  coordinates,
+  fillColor = "#8B5CF6",
+  fillOpacity = 0.15,
+  outlineColor = "#8B5CF6",
+  outlineWidth = 2,
+  interactive = true,
+  onClick,
+  onMouseEnter,
+  onMouseLeave,
+}: MapPolygonLayerProps) {
+  const { map, isLoaded } = useMap()
+  const autoId = useId()
+  const id = propId ?? autoId
+  const sourceId = `polygon-source-${id}`
+  const fillLayerId = `polygon-fill-${id}`
+  const lineLayerId = `polygon-line-${id}`
+
+  // Add source and layers on mount
+  useEffect(() => {
+    if (!isLoaded || !map) return
+
+    map.addSource(sourceId, {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Polygon", coordinates: [[]] },
+      },
+    })
+
+    map.addLayer({
+      id: fillLayerId,
+      type: "fill",
+      source: sourceId,
+      paint: { "fill-color": fillColor, "fill-opacity": fillOpacity },
+    })
+
+    map.addLayer({
+      id: lineLayerId,
+      type: "line",
+      source: sourceId,
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": outlineColor,
+        "line-width": outlineWidth,
+        "line-opacity": 0.8,
+      },
+    })
+
+    return () => {
+      try {
+        if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId)
+        if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId)
+        if (map.getSource(sourceId)) map.removeSource(sourceId)
+      } catch {
+        // ignore
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, map])
+
+  // Update geometry when coordinates change
+  useEffect(() => {
+    if (!isLoaded || !map || coordinates.length < 3) return
+    const source = map.getSource(sourceId) as MapLibreGL.GeoJSONSource
+    if (!source) return
+    const ring: [number, number][] = [...coordinates, coordinates[0]!]
+    source.setData({
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [ring] },
+    })
+  }, [isLoaded, map, coordinates, sourceId])
+
+  // Update paint when color/opacity props change
+  useEffect(() => {
+    if (!isLoaded || !map) return
+    if (map.getLayer(fillLayerId)) {
+      map.setPaintProperty(fillLayerId, "fill-color", fillColor)
+      map.setPaintProperty(fillLayerId, "fill-opacity", fillOpacity)
+    }
+    if (map.getLayer(lineLayerId)) {
+      map.setPaintProperty(lineLayerId, "line-color", outlineColor)
+      map.setPaintProperty(lineLayerId, "line-width", outlineWidth)
+    }
+  }, [
+    isLoaded,
+    map,
+    fillLayerId,
+    lineLayerId,
+    fillColor,
+    fillOpacity,
+    outlineColor,
+    outlineWidth,
+  ])
+
+  // Interactive events
+  useEffect(() => {
+    if (!isLoaded || !map || !interactive) return
+
+    const handleClick = () => onClick?.()
+    const handleMouseEnter = () => {
+      map.getCanvas().style.cursor = "pointer"
+      onMouseEnter?.()
+    }
+    const handleMouseLeave = () => {
+      map.getCanvas().style.cursor = ""
+      onMouseLeave?.()
+    }
+
+    map.on("click", fillLayerId, handleClick)
+    map.on("mouseenter", fillLayerId, handleMouseEnter)
+    map.on("mouseleave", fillLayerId, handleMouseLeave)
+
+    return () => {
+      map.off("click", fillLayerId, handleClick)
+      map.off("mouseenter", fillLayerId, handleMouseEnter)
+      map.off("mouseleave", fillLayerId, handleMouseLeave)
+    }
+  }, [
+    isLoaded,
+    map,
+    fillLayerId,
+    interactive,
+    onClick,
+    onMouseEnter,
+    onMouseLeave,
+  ])
+
+  return null
+}
+
+// ── MapDrawLayer ───────────────────────────────────────────────────────────────
+
+type MapDrawLayerProps = {
+  /** Whether drawing mode is active */
+  active: boolean
+  /** Current polygon vertices (controlled from outside) */
+  vertices: [number, number][]
+  /** Called when user clicks the map to add a new vertex */
+  onAddVertex: (point: [number, number]) => void
+}
+
+/**
+ * Interactive polygon drawing layer. When `active`, changes the cursor to a
+ * crosshair and listens for map clicks to collect vertices. Renders a live
+ * preview polygon (dashed outline + fill) with vertex dots as the user draws.
+ * Vertex state is controlled by the parent — pass the current `vertices` array
+ * and handle new points via `onAddVertex`.
+ */
+function MapDrawLayer({ active, vertices, onAddVertex }: MapDrawLayerProps) {
+  const { map, isLoaded } = useMap()
+  const autoId = useId()
+  const sourceId = `draw-preview-${autoId}`
+  const fillLayerId = `draw-fill-${autoId}`
+  const lineLayerId = `draw-line-${autoId}`
+  const vertexSourceId = `draw-vertices-${autoId}`
+  const vertexLayerId = `draw-vertex-${autoId}`
+
+  const verticesRef = useRef(vertices)
+  verticesRef.current = vertices
+
+  const onAddVertexRef = useRef(onAddVertex)
+  onAddVertexRef.current = onAddVertex
+
+  const cursorPosRef = useRef<[number, number] | null>(null)
+
+  // Helper to refresh the preview sources
+  const refreshPreview = useCallback(
+    (verts: [number, number][], cursor: [number, number] | null) => {
+      if (!map) return
+      const previewSrc = map.getSource(sourceId) as
+        | MapLibreGL.GeoJSONSource
+        | undefined
+      const vertSrc = map.getSource(vertexSourceId) as
+        | MapLibreGL.GeoJSONSource
+        | undefined
+      if (!previewSrc || !vertSrc) return
+
+      const tip = cursor && verts.length > 0 ? cursor : null
+      const pts = tip ? [...verts, tip] : [...verts]
+
+      const features: GeoJSON.Feature[] = []
+      if (pts.length >= 2) {
+        features.push({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: pts },
+        })
+      }
+      if (pts.length >= 3) {
+        features.push({
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [[...pts, pts[0]!]],
+          },
+        })
+      }
+
+      previewSrc.setData({ type: "FeatureCollection", features })
+      vertSrc.setData({
+        type: "FeatureCollection",
+        features: verts.map(([lng, lat]) => ({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: [lng, lat] },
+        })),
+      })
+    },
+    [map, sourceId, vertexSourceId]
+  )
+
+  // Set up sources and layers on mount
+  useEffect(() => {
+    if (!isLoaded || !map) return
+
+    map.addSource(sourceId, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    })
+    map.addSource(vertexSourceId, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    })
+
+    map.addLayer({
+      id: fillLayerId,
+      type: "fill",
+      source: sourceId,
+      paint: { "fill-color": "#8B5CF6", "fill-opacity": 0.1 },
+    })
+    map.addLayer({
+      id: lineLayerId,
+      type: "line",
+      source: sourceId,
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#8B5CF6",
+        "line-width": 2,
+        "line-dasharray": [4, 3],
+        "line-opacity": 0.9,
+      },
+    })
+    map.addLayer({
+      id: vertexLayerId,
+      type: "circle",
+      source: vertexSourceId,
+      paint: {
+        "circle-radius": 5,
+        "circle-color": "#8B5CF6",
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+      },
+    })
+
+    return () => {
+      try {
+        if (map.getLayer(vertexLayerId)) map.removeLayer(vertexLayerId)
+        if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId)
+        if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId)
+        if (map.getSource(vertexSourceId)) map.removeSource(vertexSourceId)
+        if (map.getSource(sourceId)) map.removeSource(sourceId)
+      } catch {
+        // ignore
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, map])
+
+  // Sync preview when vertices prop changes (e.g. undo)
+  useEffect(() => {
+    refreshPreview(vertices, cursorPosRef.current)
+  }, [vertices, refreshPreview])
+
+  // Activate / deactivate event listeners
+  useEffect(() => {
+    if (!isLoaded || !map) return
+
+    if (!active) {
+      map.getCanvas().style.cursor = ""
+      cursorPosRef.current = null
+      refreshPreview([], null)
+      return
+    }
+
+    map.getCanvas().style.cursor = "crosshair"
+
+    const handleClick = (e: MapLibreGL.MapMouseEvent) => {
+      onAddVertexRef.current([e.lngLat.lng, e.lngLat.lat])
+    }
+
+    const handleMouseMove = (e: MapLibreGL.MapMouseEvent) => {
+      cursorPosRef.current = [e.lngLat.lng, e.lngLat.lat]
+      refreshPreview(verticesRef.current, cursorPosRef.current)
+    }
+
+    map.on("click", handleClick)
+    map.on("mousemove", handleMouseMove)
+
+    return () => {
+      map.getCanvas().style.cursor = ""
+      map.off("click", handleClick)
+      map.off("mousemove", handleMouseMove)
+    }
+  }, [isLoaded, map, active, refreshPreview])
+
+  return null
+}
+
 export {
   Map,
   useMap,
@@ -1471,6 +1809,8 @@ export {
   MapControls,
   MapRoute,
   MapClusterLayer,
+  MapPolygonLayer,
+  MapDrawLayer,
 }
 
 export type { MapRef, MapViewport }

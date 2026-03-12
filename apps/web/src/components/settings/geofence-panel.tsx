@@ -12,7 +12,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
-import { Fence, Plus, Trash } from "@/components/icons"
+import { Fence, Pencil, Plus, Trash } from "@/components/icons"
 import { readStoredConfig, toConfig } from "@/lib/config"
 import {
   createGeofence,
@@ -22,7 +22,11 @@ import {
   type TraccarGeofence,
 } from "@/lib/traccar"
 
-export function GeofencePanel() {
+export function GeofencePanel({
+  onDrawGeofence,
+}: {
+  onDrawGeofence?: () => void
+}) {
   const [geofences, setGeofences] = useState<TraccarGeofence[]>([])
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<TraccarGeofence | null>(null)
@@ -56,16 +60,29 @@ export function GeofencePanel() {
               Manage geographic zones for enter/exit alerts
             </p>
           </div>
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditItem(null)
-              setShowDialog(true)
-            }}
-          >
-            <Plus className="size-4" />
-            Add Geofence
-          </Button>
+          <div className="flex items-center gap-2">
+            {onDrawGeofence && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDrawGeofence}
+                title="Draw polygon on the map"
+              >
+                <Pencil className="size-4" />
+                Draw on Map
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditItem(null)
+                setShowDialog(true)
+              }}
+            >
+              <Plus className="size-4" />
+              Add Manually
+            </Button>
+          </div>
         </div>
 
         {loading ? (
