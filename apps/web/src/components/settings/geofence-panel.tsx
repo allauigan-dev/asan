@@ -72,7 +72,9 @@ export function GeofencePanel({
     }
   }
 
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+  }, [])
 
   async function handleDelete(id: number) {
     if (!confirm("Delete this geofence?")) return
