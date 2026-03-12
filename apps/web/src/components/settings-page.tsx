@@ -95,6 +95,8 @@ type SettingsPageProps = {
   loginMode?: boolean
   /** Callback when device is updated (to refresh fleet state) */
   onDeviceUpdate?: () => void
+  /** Called when the user wants to draw a geofence on the map */
+  onDrawGeofence?: () => void
 }
 
 export function SettingsPage({
@@ -104,6 +106,7 @@ export function SettingsPage({
   onClose,
   loginMode = false,
   onDeviceUpdate,
+  onDrawGeofence,
 }: SettingsPageProps) {
   const [form, setForm] = useState<ConnectionForm>(() => readStoredConfig())
   const [activeTab, setActiveTab] = useState<SettingsTab>("server")
@@ -253,7 +256,9 @@ export function SettingsPage({
           {activeTab === "devices" && isConnected && (
             <DevicesTab connectionForm={form} onDeviceUpdate={onDeviceUpdate} />
           )}
-          {activeTab === "geofences" && isConnected && <GeofencePanel />}
+          {activeTab === "geofences" && isConnected && (
+            <GeofencePanel onDrawGeofence={onDrawGeofence} />
+          )}
           {activeTab === "drivers" && isConnected && <DriverPanel />}
           {activeTab === "commands" && isConnected && <CommandPanel />}
           {activeTab === "maintenance" && isConnected && <MaintenancePanel />}
@@ -1456,8 +1461,7 @@ function DeviceForm({
                       value={form.groupId?.toString() ?? "none"}
                       onValueChange={(value) =>
                         setForm({
-                          groupId:
-                            value === "none" ? undefined : Number(value),
+                          groupId: value === "none" ? undefined : Number(value),
                         })
                       }
                       disabled={saving || deleting}
@@ -1594,7 +1598,9 @@ function DeviceForm({
                   )}
                   {imageUploadState.status === "success" && (
                     <p className="text-[11px] text-muted-foreground">
-                      {isEditing ? "Image uploaded. Save to persist." : "Image uploaded."}
+                      {isEditing
+                        ? "Image uploaded. Save to persist."
+                        : "Image uploaded."}
                     </p>
                   )}
                 </div>

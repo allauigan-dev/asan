@@ -440,6 +440,13 @@ export const Clock = ({ className }: IconProps) => (
   </IconBase>
 )
 
+export const Pencil = ({ className }: IconProps) => (
+  <IconBase className={className}>
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    <path d="m15 5 4 4" />
+  </IconBase>
+)
+
 export const Function = ({ className }: IconProps) => (
   <IconBase className={className}>
     <rect x="4" y="13" width="4" height="7" rx="1" />
@@ -486,7 +493,15 @@ export function BatteryIndicator({
         strokeWidth="1.8"
       />
       {/* Terminal nib */}
-      <rect x="19" y="10" width="3" height="4" rx="1" fill="currentColor" stroke="none" />
+      <rect
+        x="19"
+        y="10"
+        width="3"
+        height="4"
+        rx="1"
+        fill="currentColor"
+        stroke="none"
+      />
       {/* Fill level */}
       {fillWidth > 0 && (
         <rect

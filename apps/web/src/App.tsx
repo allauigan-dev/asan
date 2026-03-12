@@ -1,12 +1,33 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+
+import { Toaster } from "sonner"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import { Input } from "@workspace/ui/components/input"
+import {
   Map,
   MapClusterLayer,
   MapControls,
+  MapDrawLayer,
   MapMarker,
+  MapPolygonLayer,
   MapRoute,
   MarkerContent,
   MarkerLabel,
@@ -27,6 +48,7 @@ import {
   MapPinned,
   Moon,
   Navigation,
+  Pencil,
   Radio,
   RefreshCw,
   Route,
@@ -44,7 +66,12 @@ import { StopTable } from "@/components/stop-table"
 import { TripTable } from "@/components/trip-table"
 import { AuthImage } from "@/components/auth-image"
 import { useFleet, type View } from "@/hooks/use-fleet"
-import type { TraccarDevice, TraccarPosition } from "@/lib/traccar"
+import {
+  createGeofence,
+  type TraccarDevice,
+  type TraccarPosition,
+} from "@/lib/traccar"
+import { readStoredConfig, toConfig } from "@/lib/config"
 import { useTheme } from "@/components/theme-provider"
 import {
   durationLabel,
@@ -56,16 +83,33 @@ import {
 } from "@/lib/utils"
 import { getStoredMapStyle, MAP_STYLES, saveMapStyle } from "@/lib/map-styles"
 
+/**
+ * Convert a pair of raw WKT numbers to a MapLibre [lon, lat] pair.
+ *
+ * Traccar's server uses "lat lon" ordering for both CIRCLE and POLYGON WKT,
+ * while standard WKT uses "lon lat". Rather than hard-coding either assumption,
+ * we detect which value must be longitude: if the second value exceeds the
+ * valid latitude range [-90, 90] it is clearly longitude, so we swap; if the
+ * first value exceeds the range, it is clearly longitude and we keep the order;
+ * otherwise we fall back to standard "lon lat" (first = lon, second = lat).
+ */
+function wktPointToLngLat(a: number, b: number): [number, number] {
+  if (Math.abs(b) > 90) return [b, a] // b is lon → data is "lat lon"
+  if (Math.abs(a) > 90) return [a, b] // a is lon → data is "lon lat"
+  return [a, b] // ambiguous — assume standard "lon lat"
+}
+
 function parseGeofenceCenter(area: string): [number, number] | null {
   const circleMatch = area.match(/CIRCLE\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*,/i)
   if (circleMatch) {
+    // CIRCLE is always "lat lon" in Traccar
     return [Number(circleMatch[2]), Number(circleMatch[1])]
   }
   const polyMatch = area.match(/POLYGON\s*\(\(([^)]+)\)/i)
   if (polyMatch) {
     const points = polyMatch[1].split(",").map((p) => {
-      const [lon, lat] = p.trim().split(/\s+/).map(Number)
-      return [lon, lat] as [number, number]
+      const parts = p.trim().split(/\s+/).map(Number)
+      return wktPointToLngLat(parts[0]!, parts[1]!)
     })
     if (points.length > 0) {
       const avgLon = points.reduce((s, p) => s + p[0], 0) / points.length
@@ -74,6 +118,66 @@ function parseGeofenceCenter(area: string): [number, number] | null {
     }
   }
   return null
+}
+
+/** Approximate a circle (lat/lon center, radius in meters) as a polygon ring */
+function circleToPolygon(
+  lat: number,
+  lon: number,
+  radiusMeters: number,
+  numPoints = 48
+): [number, number][] {
+  const points: [number, number][] = []
+  for (let i = 0; i < numPoints; i++) {
+    const angle = (i / numPoints) * 2 * Math.PI
+    const dLat = (radiusMeters / 111320) * Math.cos(angle)
+    const dLon =
+      (radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180))) *
+      Math.sin(angle)
+    points.push([lon + dLon, lat + dLat])
+  }
+  return points
+}
+
+/** Parse a Traccar WKT area string into a polygon ring ([lon, lat] pairs, not closed). */
+function parseGeofencePolygon(area: string): [number, number][] | null {
+  const polyMatch = area.match(/POLYGON\s*\(\(([^)]+)\)/i)
+  if (polyMatch) {
+    const points = polyMatch[1].split(",").map((p) => {
+      const parts = p.trim().split(/\s+/).map(Number)
+      return wktPointToLngLat(parts[0]!, parts[1]!)
+    })
+    // Strip closing duplicate if present
+    if (
+      points.length > 1 &&
+      points[0]![0] === points[points.length - 1]![0] &&
+      points[0]![1] === points[points.length - 1]![1]
+    ) {
+      points.pop()
+    }
+    return points.length >= 3 ? points : null
+  }
+  const circleMatch = area.match(
+    /CIRCLE\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*,\s*([-\d.]+)\s*\)/i
+  )
+  if (circleMatch) {
+    // CIRCLE is always "lat lon" in Traccar
+    return circleToPolygon(
+      Number(circleMatch[1]),
+      Number(circleMatch[2]),
+      Number(circleMatch[3])
+    )
+  }
+  return null
+}
+
+/**
+ * Convert an array of [lon, lat] vertices to a Traccar POLYGON WKT string.
+ * Traccar expects "lat lon" ordering in the WKT.
+ */
+function polygonToWKT(coords: [number, number][]): string {
+  const closed = [...coords, coords[0]!]
+  return `POLYGON ((${closed.map(([lon, lat]) => `${lat} ${lon}`).join(", ")}))`
 }
 
 function deviceImageUrl(uniqueId: string, filename: string) {
@@ -95,7 +199,10 @@ const DeviceMarker = memo(function DeviceMarker({
 }: DeviceMarkerProps) {
   const battery = getBatteryLevel(position)
   const DeviceIcon = getDeviceIcon(device.category)
-  const handleClick = useCallback(() => onSelect(device.id), [onSelect, device.id])
+  const handleClick = useCallback(
+    () => onSelect(device.id),
+    [onSelect, device.id]
+  )
 
   return (
     <MapMarker
@@ -123,9 +230,7 @@ const DeviceMarker = memo(function DeviceMarker({
             />
           )}
         </div>
-        <MarkerLabel position="bottom">
-          {device.name.split(",")[0]}
-        </MarkerLabel>
+        <MarkerLabel position="bottom">{device.name.split(",")[0]}</MarkerLabel>
       </MarkerContent>
       <MarkerPopup className="w-64 p-0">
         <div className="space-y-2 p-3">
@@ -161,9 +266,7 @@ const DeviceMarker = memo(function DeviceMarker({
             <span>{device.uniqueId}</span>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>
-              {relativeTime(position.fixTime ?? position.deviceTime)}
-            </span>
+            <span>{relativeTime(position.fixTime ?? position.deviceTime)}</span>
             {battery !== null && (
               <div className="flex items-center gap-1">
                 <BatteryIndicator level={battery} className="size-4" />
@@ -191,6 +294,16 @@ export function App() {
   const [mapStyleId, setMapStyleId] = useState<string>(
     () => getStoredMapStyle().id
   )
+
+  // ── Geofence drawing state ─────────────────────────────────────────────────
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [drawVertices, setDrawVertices] = useState<[number, number][]>([])
+  const [showDrawSave, setShowDrawSave] = useState(false)
+  const [drawSaveName, setDrawSaveName] = useState("")
+  const [drawSaveDesc, setDrawSaveDesc] = useState("")
+  const [drawSaving, setDrawSaving] = useState(false)
+  // Track whether drawing was initiated from the settings panel so we can return to it after save
+  const drawFromSettings = useRef(false)
 
   const mapStyle = MAP_STYLES[mapStyleId] ?? MAP_STYLES.carto
 
@@ -236,6 +349,62 @@ export function App() {
       pitch: nextStyle.defaultPitch ?? 0,
       duration: 500,
     })
+  }
+
+  // ── Geofence drawing handlers ──────────────────────────────────────────────
+  /** Start drawing mode. Pass `fromSettings=true` when triggered from the settings panel. */
+  function startDrawing(fromSettings = false) {
+    drawFromSettings.current = fromSettings
+    setShowSettings(false)
+    setIsDrawing(true)
+    setDrawVertices([])
+  }
+
+  function cancelDrawing() {
+    setIsDrawing(false)
+    setDrawVertices([])
+    if (drawFromSettings.current) {
+      setShowSettings(true)
+      drawFromSettings.current = false
+    }
+  }
+
+  function finishDrawing() {
+    if (drawVertices.length < 3) return
+    setIsDrawing(false)
+    setDrawSaveName("")
+    setDrawSaveDesc("")
+    setShowDrawSave(true)
+  }
+
+  function handleAddVertex(point: [number, number]) {
+    setDrawVertices((prev) => [...prev, point])
+  }
+
+  function handleUndoVertex() {
+    setDrawVertices((prev) => prev.slice(0, -1))
+  }
+
+  async function handleSaveDrawnGeofence() {
+    if (!drawSaveName || drawVertices.length < 3) return
+    setDrawSaving(true)
+    try {
+      const config = toConfig(readStoredConfig())
+      await createGeofence(config, {
+        name: drawSaveName,
+        description: drawSaveDesc,
+        area: polygonToWKT(drawVertices),
+      })
+      setShowDrawSave(false)
+      setDrawVertices([])
+      fleet.handleRefresh()
+      if (drawFromSettings.current) {
+        setShowSettings(true)
+        drawFromSettings.current = false
+      }
+    } finally {
+      setDrawSaving(false)
+    }
   }
 
   // Preload device icons for map rendering optimization
@@ -321,6 +490,7 @@ export function App() {
           onConnect={fleet.handleConnect}
           loginMode
         />
+        <Toaster position="bottom-right" richColors />
       </div>
     )
   }
@@ -418,6 +588,7 @@ export function App() {
             }}
             onClose={() => setShowSettings(false)}
             onDeviceUpdate={() => fleet.handleRefresh()}
+            onDrawGeofence={() => startDrawing(true)}
           />
         </div>
       ) : null}
@@ -466,6 +637,18 @@ export function App() {
                 </span>
               </div>
             )}
+            {isDrawing && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="gap-2 shadow-sm"
+                onClick={cancelDrawing}
+              >
+                <Pencil className="size-4" />
+                Cancel Drawing
+              </Button>
+            )}
             <Button
               type="button"
               variant="secondary"
@@ -500,8 +683,33 @@ export function App() {
               showFullscreen
             />
 
+            {/* Geofence polygon fills — rendered first so they appear below markers */}
+            {fleet.fleet.geofences.map((gf) => {
+              const polygon = parseGeofencePolygon(gf.area)
+              if (!polygon) return null
+              return (
+                <MapPolygonLayer
+                  key={`gf-poly-${gf.id}`}
+                  id={`gf-${gf.id}`}
+                  coordinates={polygon}
+                  fillColor="#8B5CF6"
+                  fillOpacity={0.12}
+                  outlineColor="#8B5CF6"
+                  outlineWidth={2}
+                  interactive={false}
+                />
+              )
+            })}
+
+            {/* Draw layer — active when drawing mode is on */}
+            <MapDrawLayer
+              active={isDrawing}
+              vertices={drawVertices}
+              onAddVertex={handleAddVertex}
+            />
+
             {/* Live cluster layer (zoomed out) */}
-            {view === "live" && (
+            {view === "live" && !isDrawing && (
               <MapClusterLayer
                 data={deviceClusterData}
                 clusterMaxZoom={CLUSTER_MAX_ZOOM}
@@ -517,6 +725,7 @@ export function App() {
 
             {/* Live markers (zoomed in) */}
             {view === "live" &&
+              !isDrawing &&
               Math.floor(mapZoom) > CLUSTER_MAX_ZOOM &&
               fleet.devices.map((device) => {
                 const position = fleet.positionsByDevice.get(device.id)
@@ -533,7 +742,7 @@ export function App() {
               })}
 
             {/* Live trail for selected device */}
-            {view === "live" && fleet.selectedDeviceTrail.length > 1 && (
+            {view === "live" && !isDrawing && fleet.selectedDeviceTrail.length > 1 && (
               <MapRoute
                 coordinates={fleet.selectedDeviceTrail}
                 color="#4f9cf9"
@@ -701,26 +910,66 @@ export function App() {
                 </MapMarker>
               ))}
 
-            {/* Geofence markers */}
-            {fleet.fleet.geofences.map((gf) => {
+            {/* Geofence name pins — hidden while drawing so they don't clutter vertex placement */}
+            {!isDrawing && fleet.fleet.geofences.map((gf) => {
               const center = parseGeofenceCenter(gf.area)
               if (!center) return null
               return (
-                <MapMarker
-                  key={`gf-${gf.id}`}
-                  longitude={center[0]}
-                  latitude={center[1]}
-                >
-                  <MarkerContent>
-                    <div className="flex size-6 items-center justify-center rounded-full border-2 border-violet-400/30 bg-violet-500/80 text-white">
-                      <Fence className="size-3" />
-                    </div>
-                    <MarkerLabel position="bottom">{gf.name}</MarkerLabel>
-                  </MarkerContent>
-                </MapMarker>
+                <Fragment key={gf.id}>
+                  <MapMarker longitude={center[0]} latitude={center[1]}>
+                    <MarkerContent>
+                      <div className="flex size-6 items-center justify-center rounded-full border-2 border-violet-400/30 bg-violet-500/80 text-white">
+                        <Fence className="size-3" />
+                      </div>
+                      <MarkerLabel position="bottom">{gf.name}</MarkerLabel>
+                    </MarkerContent>
+                  </MapMarker>
+                </Fragment>
               )
             })}
           </Map>
+
+          {/* Drawing instruction overlay */}
+          {isDrawing && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center">
+              <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border/60 bg-background/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-500">
+                  <Pencil className="size-3.5" />
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">
+                    {drawVertices.length === 0
+                      ? "Click on the map to place vertices"
+                      : drawVertices.length < 3
+                        ? `${drawVertices.length} point${drawVertices.length > 1 ? "s" : ""} — need at least 3`
+                        : `${drawVertices.length} points`}
+                  </span>
+                  <span className="ml-1 text-muted-foreground">
+                    {drawVertices.length >= 3 && "· click to add more"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={handleUndoVertex}
+                    disabled={drawVertices.length === 0}
+                  >
+                    Undo
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 bg-violet-500 px-3 text-xs text-white hover:bg-violet-600"
+                    onClick={finishDrawing}
+                    disabled={drawVertices.length < 3}
+                  >
+                    Finish
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Replay playback controller overlay */}
           {view === "replay" && (
@@ -817,6 +1066,52 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* Save drawn geofence dialog */}
+      <Dialog open={showDrawSave} onOpenChange={setShowDrawSave}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save Geofence</DialogTitle>
+            <DialogDescription>
+              {drawVertices.length} vertices drawn. Give this zone a name to
+              save it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Name (required)"
+              value={drawSaveName}
+              onChange={(e) => setDrawSaveName(e.target.value)}
+              autoFocus
+            />
+            <Input
+              placeholder="Description (optional)"
+              value={drawSaveDesc}
+              onChange={(e) => setDrawSaveDesc(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDrawSave(false)
+                setIsDrawing(true)
+              }}
+              disabled={drawSaving}
+            >
+              Back to Edit
+            </Button>
+            <Button
+              onClick={handleSaveDrawnGeofence}
+              disabled={!drawSaveName || drawSaving}
+            >
+              {drawSaving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Toaster position="bottom-right" richColors />
     </div>
   )
 }
