@@ -10,6 +10,12 @@ import {
   createPermission,
   deletePermission,
   getDevicePermissions,
+  getGeofences,
+  getNotifications,
+  getDrivers,
+  getComputedAttributes,
+  getCommands,
+  getMaintenance,
   type PermissionType,
   type TraccarPermission,
 } from "@/lib/traccar"
@@ -72,30 +78,127 @@ export function DeviceConnectionsSection({
   }, [deviceId])
 
   async function loadConnections() {
-    // TODO: Implement loading of current connections
-    // For now, set to loaded with empty connections
-    setState({ status: "loaded", current: {
-      geofences: [],
-      notifications: [],
-      drivers: [],
-      attributes: [],
-      commands: [],
-      maintenance: [],
-    }})
-    setPending({
-      geofences: [],
-      notifications: [],
-      drivers: [],
-      attributes: [],
-      commands: [],
-      maintenance: [],
-    })
+    setState({ status: "loading" })
+    const config = toConfig(readStoredConfig())
+
+    try {
+      const [
+        geofences,
+        notifications,
+        drivers,
+        attributes,
+        commands,
+        maintenance,
+        currentGeofences,
+        currentNotifications,
+        currentDrivers,
+        currentAttributes,
+        currentCommands,
+        currentMaintenance,
+      ] = await Promise.all([
+        getGeofences(config),
+        getNotifications(config),
+        getDrivers(config),
+        getComputedAttributes(config),
+        getCommands(config),
+        getMaintenance(config),
+        getDevicePermissions(config, deviceId, "geofence"),
+        getDevicePermissions(config, deviceId, "notification"),
+        getDevicePermissions(config, deviceId, "driver"),
+        getDevicePermissions(config, deviceId, "attribute"),
+        getDevicePermissions(config, deviceId, "command"),
+        getDevicePermissions(config, deviceId, "maintenance"),
+      ])
+
+      setEntityOptions({
+        geofences: geofences.map((g) => ({ id: g.id, name: g.name })),
+        notifications: notifications.map((n) => ({ id: n.id, name: n.type || `Notification ${n.id}` })),
+        drivers: drivers.map((d) => ({ id: d.id, name: d.name })),
+        attributes: attributes.map((a) => ({ id: a.id, name: a.description || `Attribute ${a.id}` })),
+        commands: commands.map((c) => ({ id: c.id, name: c.description || `Command ${c.id}` })),
+        maintenance: maintenance.map((m) => ({ id: m.id, name: m.name })),
+      })
+
+      const current: ConnectionsByType = {
+        geofences: currentGeofences,
+        notifications: currentNotifications,
+        drivers: currentDrivers,
+        attributes: currentAttributes,
+        commands: currentCommands,
+        maintenance: currentMaintenance,
+      }
+
+      setState({ status: "loaded", current })
+      setPending(current)
+    } catch (error) {
+      setState({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   async function handleSave() {
-    // TODO: Implement save logic
-    toast.success("Connections saved")
-    onSave?.()
+    if (state.status !== "loaded") return
+
+    setState({ status: "saving" })
+    const config = toConfig(readStoredConfig())
+
+    try {
+      const types: Array<keyof ConnectionsByType> = [
+        "geofences",
+        "notifications",
+        "drivers",
+        "attributes",
+        "commands",
+        "maintenance",
+      ]
+
+      const fieldMap: Record<string, keyof TraccarPermission> = {
+        geofences: "geofenceId",
+        notifications: "notificationId",
+        drivers: "driverId",
+        attributes: "attributeId",
+        commands: "commandId",
+        maintenance: "maintenanceId",
+      }
+
+      const permissionChanges: Promise<void>[] = []
+
+      for (const type of types) {
+        const current = state.current[type]
+        const pendingSet = new Set(pending[type])
+        const currentSet = new Set(current)
+
+        const added = pending[type].filter((id) => !currentSet.has(id))
+        const removed = current.filter((id) => !pendingSet.has(id))
+
+        for (const entityId of added) {
+          const permission: TraccarPermission = {
+            deviceId,
+            [fieldMap[type]]: entityId,
+          }
+          permissionChanges.push(createPermission(config, permission))
+        }
+
+        for (const entityId of removed) {
+          const permission: TraccarPermission = {
+            deviceId,
+            [fieldMap[type]]: entityId,
+          }
+          permissionChanges.push(deletePermission(config, permission))
+        }
+      }
+
+      await Promise.all(permissionChanges)
+      toast.success("Device connections updated")
+      onSave?.()
+    } catch (error) {
+      setState({
+        status: "error",
+        message: `Failed to save: ${error instanceof Error ? error.message : String(error)}`,
+      })
+    }
   }
 
   if (state.status === "loading") {
