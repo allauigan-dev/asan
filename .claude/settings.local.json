@@ -6,7 +6,18 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm dlx:*)",
       "Bash(pnpm format:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(ls /home/hallauigan/projects/asan/apps/web/.env* 2>/dev/null; cat /home/hallauigan/projects/asan/apps/web/vite.config.ts)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(git stash:*)",
+      "Skill(commit-commands:commit-push-pr)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Skill(commit-commands:commit)"
     ]
   }
 }

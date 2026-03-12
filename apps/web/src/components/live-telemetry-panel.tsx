@@ -187,7 +187,13 @@ export function LiveTelemetryPanel({
                   now.getTime() - 6 * 60 * 60 * 1000
                 ).toISOString()
                 const to = now.toISOString()
-                downloadExport(config, "csv", selectedDevice.id, from, to).catch(() => {})
+                downloadExport(
+                  config,
+                  "csv",
+                  selectedDevice.id,
+                  from,
+                  to
+                ).catch(() => {})
               }}
               title="Export CSV"
             >

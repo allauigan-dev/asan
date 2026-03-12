@@ -12,7 +12,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
-import { Plus, Trash, Users } from "@/components/icons"
+import { Plus, ShieldCheck, Trash, Users } from "@/components/icons"
 import { readStoredConfig, toConfig } from "@/lib/config"
 import {
   createUser,
@@ -21,12 +21,15 @@ import {
   updateUser,
   type TraccarFullUser,
 } from "@/lib/traccar"
+import { UserPermissionsDialog } from "@/components/settings/user-permissions-dialog"
 
 export function UserPanel() {
   const [users, setUsers] = useState<TraccarFullUser[]>([])
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<TraccarFullUser | null>(null)
   const [showDialog, setShowDialog] = useState(false)
+  const [permUser, setPermUser] = useState<TraccarFullUser | null>(null)
+  const [showPerms, setShowPerms] = useState(false)
 
   function load() {
     const config = toConfig(readStoredConfig())
@@ -99,19 +102,34 @@ export function UserPanel() {
                       <p className="text-xs text-muted-foreground">{u.email}</p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!confirm(`Delete user "${u.name}"?`)) return
-                      const config = toConfig(readStoredConfig())
-                      deleteUser(config, u.id).then(load)
-                    }}
-                  >
-                    <Trash className="size-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      title="Manage permissions"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPermUser(u)
+                        setShowPerms(true)
+                      }}
+                    >
+                      <ShieldCheck className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (!confirm(`Delete user "${u.name}"?`)) return
+                        const config = toConfig(readStoredConfig())
+                        deleteUser(config, u.id).then(load)
+                      }}
+                    >
+                      <Trash className="size-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -124,6 +142,15 @@ export function UserPanel() {
           item={editItem}
           onSaved={load}
         />
+
+        {permUser && (
+          <UserPermissionsDialog
+            open={showPerms}
+            onOpenChange={setShowPerms}
+            userId={permUser.id}
+            userName={permUser.name}
+          />
+        )}
       </div>
     </ScrollArea>
   )
