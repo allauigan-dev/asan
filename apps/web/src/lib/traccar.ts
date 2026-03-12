@@ -161,6 +161,35 @@ export type TraccarServer = {
   attributes?: Record<string, unknown>
 }
 
+// Permission management types
+export type PermissionType =
+  | "geofence"
+  | "notification"
+  | "driver"
+  | "attribute"
+  | "command"
+  | "maintenance"
+
+export type TraccarPermission = {
+  deviceId?: number
+  geofenceId?: number
+  notificationId?: number
+  driverId?: number
+  attributeId?: number
+  commandId?: number
+  maintenanceId?: number
+}
+
+// Mapping from permission type to field name
+const PERMISSION_FIELD_MAP: Record<PermissionType, keyof TraccarPermission> = {
+  geofence: "geofenceId",
+  notification: "notificationId",
+  driver: "driverId",
+  attribute: "attributeId",
+  command: "commandId",
+  maintenance: "maintenanceId",
+}
+
 export type TraccarCommand = {
   id?: number
   deviceId?: number
