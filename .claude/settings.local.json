@@ -17,7 +17,17 @@
       "Skill(commit-commands:commit-push-pr)",
       "Bash(git checkout:*)",
       "Bash(git pull:*)",
-      "Skill(commit-commands:commit)"
+      "Skill(commit-commands:commit)",
+      "Bash(ls -la /home/hallauigan/projects/asan/packages/ui/src/components/ui/ | grep -E \"\\\\.tsx$\")",
+      "Bash(ls -la /home/hallauigan/projects/asan/apps/web/src/components/ | grep -E \"\\\\.tsx$\" | head -20)",
+      "Bash(git -C /home/hallauigan/projects/asan diff HEAD~5..HEAD --stat | head -40)",
+      "Bash(find /home/hallauigan/projects/asan/packages/ui/src/components/ui -name \"*.tsx\" -exec wc -l {} + | tail -1)",
+      "Bash(grep -c \"function\\\\|component\" /home/hallauigan/projects/asan/apps/web/src/components/*.tsx 2>/dev/null | head -15)",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_search"
     ]
+  },
+  "enabledPlugins": {
+    "context-mode@context-mode": true
   }
 }
