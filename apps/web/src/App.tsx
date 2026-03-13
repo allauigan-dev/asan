@@ -414,7 +414,7 @@ export function App() {
     })
   }, [])
 
-  // 1. Live View map follow logic
+  // 1. Live View — fly to device when selection changes
   useEffect(() => {
     if (
       view !== "live" ||
@@ -424,21 +424,35 @@ export function App() {
     )
       return
 
-    const isNewDevice = lastFlewToDeviceId.current !== fleet.selectedDevice.id
-    lastFlewToDeviceId.current = fleet.selectedDevice.id
     const currentZoom = mapRef.current.getZoom()
     mapRef.current.flyTo({
       center: [
         fleet.selectedPosition.longitude,
         fleet.selectedPosition.latitude,
       ],
-      ...(isNewDevice && currentZoom < 11.8 ? { zoom: 11.8 } : {}),
+      ...(currentZoom < 11.8 ? { zoom: 11.8 } : {}),
       duration: 900,
     })
-  }, [fleet.selectedDevice, fleet.selectedPosition, view])
+    lastFlewToDeviceId.current = fleet.selectedDevice.id
+    // Only re-fly when the selected device changes, not on every position update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleet.selectedDeviceId, view])
 
-  // 2. Replay View map initialization logic
+  // 2a. Auto-load replay data when the selected device changes in replay view
+  useEffect(() => {
+    if (view !== "replay") return
+    fleet.handleLoadReplay()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleet.selectedDeviceId, view])
+
+  // 2b. Replay View map initialization logic
   const lastFlewToTripKey = useRef<string | null>(null)
+
+  // Reset the fly-to cache whenever the selected device changes so the
+  // guard doesn't block the fly-to after the new device's data arrives.
+  useEffect(() => {
+    lastFlewToTripKey.current = null
+  }, [fleet.selectedDeviceId])
 
   useEffect(() => {
     if (
@@ -466,12 +480,12 @@ export function App() {
       zoom: 11.2,
       duration: 900,
     })
-  }, [
-    fleet.selectedDevice,
-    fleet.selectedTripIndex,
-    fleet.selectedTripCoordinates,
-    view,
-  ])
+  // Only fire when coordinates or trip index actually change — NOT when the
+  // device selection changes before new data has loaded. Firing early would
+  // read stale coordinates (old device) and poison the tripKey cache so the
+  // real fly-to (after data loads) gets skipped.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleet.selectedTripCoordinates, fleet.selectedTripIndex, view])
 
   const routePositions = fleet.selectedTripPositions
   const routeCoordinates = fleet.selectedTripCoordinates

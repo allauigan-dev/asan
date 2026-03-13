@@ -170,15 +170,6 @@ export type PermissionType =
   | "command"
   | "maintenance"
 
-export type TraccarPermission = {
-  deviceId?: number
-  geofenceId?: number
-  notificationId?: number
-  driverId?: number
-  attributeId?: number
-  commandId?: number
-  maintenanceId?: number
-}
 
 // Mapping from permission type to field name
 const PERMISSION_FIELD_MAP: Record<PermissionType, keyof TraccarPermission> = {

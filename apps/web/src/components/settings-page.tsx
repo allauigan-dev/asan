@@ -33,6 +33,7 @@ import {
   Fence,
   FolderOpen,
   Function,
+  Link2,
   Person,
   Plus,
   Server,
@@ -43,6 +44,7 @@ import {
   Wrench,
 } from "@/components/icons"
 import { AttributePanel } from "@/components/settings/attribute-panel"
+import { DeviceConnectionsSection } from "@/components/settings/device-connections-section"
 import { CommandPanel } from "@/components/settings/command-panel"
 import { DriverPanel } from "@/components/settings/driver-panel"
 import { GeofencePanel } from "@/components/settings/geofence-panel"
@@ -985,6 +987,8 @@ function DevicesTab({
   const [state, setState] = useState<DevicesTabState>({ status: "loading" })
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<TraccarDevice | null>(null)
+  const [connectingDevice, setConnectingDevice] =
+    useState<TraccarDevice | null>(null)
 
   function loadDevices() {
     setState({ status: "loading" })
@@ -1071,12 +1075,14 @@ function DevicesTab({
               {devices.map((device) => {
                 const DeviceIcon = getDeviceIcon(device.category)
                 return (
-                  <button
+                  <div
                     key={device.id}
-                    onClick={() => setEditingDevice(device)}
-                    className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-muted/30"
+                    className="flex w-full items-center justify-between p-4 transition-colors hover:bg-muted/30"
                   >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <button
+                      onClick={() => setEditingDevice(device)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
                       <DeviceIcon className="size-5 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">
@@ -1094,7 +1100,7 @@ function DevicesTab({
                           )}
                         </div>
                       </div>
-                    </div>
+                    </button>
                     <div className="flex shrink-0 items-center gap-2">
                       {device.status && (
                         <span
@@ -1114,9 +1120,23 @@ function DevicesTab({
                           Disabled
                         </span>
                       )}
-                      <ChevronRight className="size-4 text-muted-foreground" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        title="Manage connections"
+                        onClick={() => setConnectingDevice(device)}
+                      >
+                        <Link2 className="size-4" />
+                      </Button>
+                      <button
+                        onClick={() => setEditingDevice(device)}
+                        className="flex items-center"
+                      >
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -1170,6 +1190,34 @@ function DevicesTab({
               device={editingDevice}
               onSuccess={handleDeviceUpdated}
               onCancel={() => setEditingDevice(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Device Connections Dialog */}
+      <Dialog
+        open={!!connectingDevice}
+        onOpenChange={(open) => !open && setConnectingDevice(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Link2 className="size-4 text-muted-foreground" />
+              <DialogTitle>
+                Connections — {connectingDevice?.name}
+              </DialogTitle>
+            </div>
+            <DialogDescription>
+              Link this device to geofences, drivers, notifications, and other
+              entities.
+            </DialogDescription>
+          </DialogHeader>
+          {connectingDevice && (
+            <DeviceConnectionsSection
+              deviceId={connectingDevice.id}
+              onSave={() => setConnectingDevice(null)}
+              onCancel={() => setConnectingDevice(null)}
             />
           )}
         </DialogContent>
