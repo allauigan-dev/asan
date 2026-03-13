@@ -114,7 +114,11 @@ export function CommandPanel() {
                     className="size-7"
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (!confirm(`Delete command "${cmd.description || cmd.type}"?`))
+                      if (
+                        !confirm(
+                          `Delete command "${cmd.description || cmd.type}"?`
+                        )
+                      )
                         return
                       const config = toConfig(readStoredConfig())
                       deleteSavedCommand(config, cmd.id!).then(load)
@@ -169,7 +173,9 @@ function CommandFormDialog({
           : ""
       )
       const config = toConfig(readStoredConfig())
-      getCommandTypes(config).then(setTypes).catch(() => {})
+      getCommandTypes(config)
+        .then(setTypes)
+        .catch(() => {})
     }
   }, [open, item])
 
@@ -200,9 +206,7 @@ function CommandFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {item ? "Edit Command" : "Add Command"}
-          </DialogTitle>
+          <DialogTitle>{item ? "Edit Command" : "Add Command"}</DialogTitle>
           <DialogDescription>
             {item
               ? "Update the saved command."

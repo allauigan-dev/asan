@@ -7,6 +7,8 @@ import {
   useState,
 } from "react"
 
+import { toast } from "sonner"
+
 import {
   type ConnectionForm,
   clearConfig,
@@ -90,6 +92,60 @@ const emptyFleet: FleetState = {
   events: [],
   stops: [],
   geofences: [],
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  deviceOnline: "Device Online",
+  deviceOffline: "Device Offline",
+  deviceUnknown: "Device Unknown",
+  deviceMoving: "Device Moving",
+  deviceStopped: "Device Stopped",
+  deviceOverspeed: "Overspeed Detected",
+  deviceFuelDrop: "Fuel Drop",
+  deviceFuelIncrease: "Fuel Increase",
+  geofenceEnter: "Geofence Entered",
+  geofenceExit: "Geofence Exited",
+  alarm: "Alarm",
+  ignitionOn: "Ignition On",
+  ignitionOff: "Ignition Off",
+  maintenance: "Maintenance Due",
+  textMessage: "Text Message",
+  driverChanged: "Driver Changed",
+}
+
+const EVENT_TOAST_VARIANT: Record<
+  string,
+  | typeof toast
+  | typeof toast.error
+  | typeof toast.warning
+  | typeof toast.success
+> = {
+  alarm: toast.error,
+  deviceOffline: toast.warning,
+  deviceUnknown: toast.warning,
+  deviceOverspeed: toast.warning,
+  deviceFuelDrop: toast.warning,
+  geofenceExit: toast.warning,
+  deviceOnline: toast.success,
+  ignitionOn: toast.success,
+  geofenceEnter: toast.success,
+}
+
+function formatEventType(type: string): string {
+  return (
+    EVENT_LABELS[type] ??
+    type.replace(/([A-Z])/g, " $1").replace(/^\w/, (c) => c.toUpperCase())
+  )
+}
+
+function formatEventTimestamp(value?: string): string {
+  if (!value) return ""
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value))
 }
 
 export function useFleet() {
@@ -333,6 +389,17 @@ export function useFleet() {
     }
     setTrailVersion((v) => v + 1)
 
+    // Fire toasts for incoming realtime events
+    for (const event of merged.events!) {
+      const device = fleet.devices.find((d) => d.id === event.deviceId)
+      const label = formatEventType(event.type)
+      const description = [device?.name, formatEventTimestamp(event.eventTime)]
+        .filter(Boolean)
+        .join(" · ")
+      const toastFn = EVENT_TOAST_VARIANT[event.type] ?? toast
+      toastFn(label, { description })
+    }
+
     startTransition(() => {
       setFleet((current) => ({
         ...current,
@@ -400,14 +467,21 @@ export function useFleet() {
     }
 
     return () => {
-      socket.close()
+      // If still connecting, defer close until open to avoid browser warning
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.onopen = () => socket.close()
+      } else {
+        socket.close()
+      }
       if (positionThrottler.current) {
         positionThrottler.current.destroy()
         positionThrottler.current = null
       }
       pendingPayloads.current = []
     }
-  }, [connectionForm, connectionState, flushPayloads])
+    // flushPayloads is a useEffectEvent — intentionally excluded from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionForm, connectionState])
 
   // Establish a cookie session so /api/media requests can authenticate via
   // credentials: 'include' (Traccar's media endpoint requires cookie auth).

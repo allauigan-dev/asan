@@ -170,15 +170,6 @@ export type PermissionType =
   | "command"
   | "maintenance"
 
-export type TraccarPermission = {
-  deviceId?: number
-  geofenceId?: number
-  notificationId?: number
-  driverId?: number
-  attributeId?: number
-  commandId?: number
-  maintenanceId?: number
-}
 
 // Mapping from permission type to field name
 const PERMISSION_FIELD_MAP: Record<PermissionType, keyof TraccarPermission> = {
@@ -1107,6 +1098,124 @@ function unlinkPermission(
   })
 }
 
+// ── Per-user entity queries ────────────────────────────────────────────────────
+
+function getDevicesByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarDevice[]>(config, "/devices", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getGroupsByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarGroup[]>(config, "/groups", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getGeofencesByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarGeofence[]>(config, "/geofences", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getNotificationsByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarNotification[]>(config, "/notifications", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getCalendarsByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarCalendar[]>(config, "/calendars", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getManagedUsersByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarFullUser[]>(config, "/users", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getAttributesByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarAttribute[]>(config, "/attributes/computed", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getDriversByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarDriver[]>(config, "/drivers", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getCommandsByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarCommand[]>(config, "/commands", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+function getMaintenanceByUser(config: TraccarConfig, userId: number) {
+  return request<TraccarMaintenance[]>(config, "/maintenance", {
+    query: new URLSearchParams({ userId: String(userId) }),
+  })
+}
+
+// ── Uncached "all entities" fetches for admin permission management ────────────
+
+function getAllDevices(config: TraccarConfig) {
+  return request<TraccarDevice[]>(config, "/devices", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllGroups(config: TraccarConfig) {
+  return request<TraccarGroup[]>(config, "/groups", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllGeofences(config: TraccarConfig) {
+  return request<TraccarGeofence[]>(config, "/geofences", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllNotifications(config: TraccarConfig) {
+  return request<TraccarNotification[]>(config, "/notifications", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllCalendars(config: TraccarConfig) {
+  return request<TraccarCalendar[]>(config, "/calendars", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllComputedAttributes(config: TraccarConfig) {
+  return request<TraccarAttribute[]>(config, "/attributes/computed", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllDrivers(config: TraccarConfig) {
+  return request<TraccarDriver[]>(config, "/drivers", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllCommands(config: TraccarConfig) {
+  return request<TraccarCommand[]>(config, "/commands", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
+function getAllMaintenance(config: TraccarConfig) {
+  return request<TraccarMaintenance[]>(config, "/maintenance", {
+    query: new URLSearchParams({ all: "true" }),
+  })
+}
+
 // ── Users (admin) ─────────────────────────────────────────────────────────────
 
 function getUsers(config: TraccarConfig) {
@@ -1371,6 +1480,25 @@ export {
   getSummaryReport,
   getTripReport,
   getUsers,
+  getAttributesByUser,
+  getCalendarsByUser,
+  getCommandsByUser,
+  getDevicesByUser,
+  getDriversByUser,
+  getGeofencesByUser,
+  getGroupsByUser,
+  getManagedUsersByUser,
+  getMaintenanceByUser,
+  getNotificationsByUser,
+  getAllCalendars,
+  getAllCommands,
+  getAllComputedAttributes,
+  getAllDevices,
+  getAllDrivers,
+  getAllGeofences,
+  getAllGroups,
+  getAllMaintenance,
+  getAllNotifications,
   linkPermission,
   login,
   logout,
