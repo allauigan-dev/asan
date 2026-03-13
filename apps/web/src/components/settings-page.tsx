@@ -1196,32 +1196,14 @@ function DevicesTab({
       </Dialog>
 
       {/* Device Connections Dialog */}
-      <Dialog
-        open={!!connectingDevice}
-        onOpenChange={(open) => !open && setConnectingDevice(null)}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <Link2 className="size-4 text-muted-foreground" />
-              <DialogTitle>
-                Connections — {connectingDevice?.name}
-              </DialogTitle>
-            </div>
-            <DialogDescription>
-              Link this device to geofences, drivers, notifications, and other
-              entities.
-            </DialogDescription>
-          </DialogHeader>
-          {connectingDevice && (
-            <DeviceConnectionsSection
-              deviceId={connectingDevice.id}
-              onSave={() => setConnectingDevice(null)}
-              onCancel={() => setConnectingDevice(null)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {connectingDevice && (
+        <DeviceConnectionsSection
+          open={!!connectingDevice}
+          onOpenChange={(open) => !open && setConnectingDevice(null)}
+          deviceId={connectingDevice.id}
+          deviceName={connectingDevice.name}
+        />
+      )}
     </div>
   )
 }

@@ -40,9 +40,11 @@ import {
   getDevices,
   getDrivers,
   getGroups,
+  getGroupUsers,
   updateGroup,
   type TraccarDevice,
   type TraccarDriver,
+  type TraccarFullUser,
   type TraccarGroup,
 } from "@/lib/traccar"
 
@@ -184,8 +186,10 @@ function GroupMembersDialog({
 }) {
   const [devices, setDevices] = useState<TraccarDevice[]>([])
   const [drivers, setDrivers] = useState<TraccarDriver[]>([])
+  const [users, setUsers] = useState<TraccarFullUser[]>([])
   const [loadingDevices, setLoadingDevices] = useState(false)
   const [loadingDrivers, setLoadingDrivers] = useState(false)
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   useEffect(() => {
     if (!open || !group) return
@@ -202,6 +206,12 @@ function GroupMembersDialog({
       .then(setDrivers)
       .catch(() => setDrivers([]))
       .finally(() => setLoadingDrivers(false))
+
+    setLoadingUsers(true)
+    getGroupUsers(config, group.id)
+      .then(setUsers)
+      .catch(() => setUsers([]))
+      .finally(() => setLoadingUsers(false))
   }, [open, group])
 
   return (
@@ -210,7 +220,7 @@ function GroupMembersDialog({
         <DialogHeader>
           <DialogTitle>{group?.name ?? "Group"}</DialogTitle>
           <DialogDescription>
-            Devices and drivers linked to this group
+            Devices, drivers, and users linked to this group
           </DialogDescription>
         </DialogHeader>
 
@@ -231,6 +241,15 @@ function GroupMembersDialog({
               {!loadingDrivers && (
                 <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs">
                   {drivers.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="users">
+              <Person className="mr-1.5 size-3.5" />
+              Users
+              {!loadingUsers && (
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs">
+                  {users.length}
                 </span>
               )}
             </TabsTrigger>
@@ -292,6 +311,41 @@ function GroupMembersDialog({
                         <p className="truncate text-xs text-muted-foreground">
                           {dr.uniqueId}
                         </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="users" className="mt-3">
+            <ScrollArea className="max-h-64">
+              <div className="space-y-1.5 pr-1">
+                {loadingUsers ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    Loading…
+                  </p>
+                ) : users.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    No users linked to this group
+                  </p>
+                ) : (
+                  users.map((u) => (
+                    <div
+                      key={u.id}
+                      className="flex items-center gap-3 rounded-md border px-3 py-2.5"
+                    >
+                      <Person className="size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {u.name || u.email}
+                        </p>
+                        {u.name && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {u.email}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))

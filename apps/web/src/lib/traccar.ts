@@ -1364,7 +1364,7 @@ export async function createPermission(
   config: TraccarConfig,
   permission: TraccarPermission
 ): Promise<void> {
-  await apiRequest<void>(config, "/permissions", {
+  await request<void>(config, "/permissions", {
     method: "POST",
     body: JSON.stringify(permission),
   })
@@ -1379,7 +1379,7 @@ export async function deletePermission(
   config: TraccarConfig,
   permission: TraccarPermission
 ): Promise<void> {
-  await apiRequest<void>(config, "/permissions", {
+  await request<void>(config, "/permissions", {
     method: "DELETE",
     body: JSON.stringify(permission),
   })
@@ -1396,7 +1396,7 @@ export async function getDevicePermissions(
   type: PermissionType
 ): Promise<number[]> {
   try {
-    const permissions = await apiRequest<TraccarPermission[]>(
+    const permissions = await request<TraccarPermission[]>(
       config,
       "/permissions"
     )
@@ -1418,7 +1418,7 @@ export async function getEntityDevices(
   type: PermissionType
 ): Promise<number[]> {
   try {
-    const permissions = await apiRequest<TraccarPermission[]>(
+    const permissions = await request<TraccarPermission[]>(
       config,
       "/permissions"
     )
@@ -1426,6 +1426,29 @@ export async function getEntityDevices(
     return permissions
       .filter((p) => p[fieldName] === entityId && p.deviceId)
       .map((p) => p.deviceId as number)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Get all users connected to a group
+ */
+async function getGroupUsers(
+  config: TraccarConfig,
+  groupId: number
+): Promise<TraccarFullUser[]> {
+  try {
+    const [allUsers, permissions] = await Promise.all([
+      request<TraccarFullUser[]>(config, "/users"),
+      request<TraccarPermission[]>(config, "/permissions"),
+    ])
+    const linkedUserIds = new Set(
+      permissions
+        .filter((p) => p.groupId === groupId && p.userId != null)
+        .map((p) => p.userId as number)
+    )
+    return allUsers.filter((u) => linkedUserIds.has(u.id))
   } catch {
     return []
   }
@@ -1461,6 +1484,7 @@ export {
   downloadExport,
   getGeofenceReport,
   getGeofences,
+  getGroupUsers,
   getGroups,
   getHealth,
   getMaintenance,
